@@ -1,0 +1,10 @@
+# 依赖（本仓库插件按约定零运行时依赖，此处仅防御性忽略）
+node_modules/
+
+# DSH 插件工作区级交接包输出（dsh-handoff-kit opt-in target=workspace）
+.dsh/
+
+# 杂项
+*.log
+.DS_Store
+Thumbs.db
