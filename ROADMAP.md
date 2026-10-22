@@ -1,5 +1,7 @@
 # dsh-plugins ROADMAP
 
+<!-- docs-meta: status=current; phase=cross; verified=c275312@2026-10-22; tracks=-; supersedes=-; superseded-by=- -->
+
 > 本文件是插件仓库**阶段与状态的唯一权威**。规划、进度、验收均以这里为准；
 > 每阶段的设计与验收见 `docs/<插件>/{design,acceptance}/`。
 > 最后更新：2026-10-22
@@ -54,7 +56,7 @@ fake 策略单测为补充而非替代。剩下的只是 P0 设计边界（无 g
 
 **验收结论**（2026-10-22）：M1 消费闭环（`handoff_load`/`/handoff resume`）实机通过；
 M2 真实改动证据与血缘（manifest@2、workspaceChanges、goal/jobs 燃料、`append`/`update`/`supersedes`、
-verify 血缘检查）实机通过（221/221 单测、外部哈希复算、v1 批次兼容）；M3 按 Q1 决议仅保留接口与文档、
+verify 血缘检查）实机通过（单测全绿，数量以 `npm test` 输出为准；外部哈希复算、v1 批次兼容）；M3 按 Q1 决议仅保留接口与文档、
 P1 运行时无 LLM 调用/无自动写入。已知缺口为宿主契约限制（当前 turn 改动不可见、Session 关闭后
 summary 不可读）与无删除 API，已在验收记录挂账。详见
 [P1 验收记录](docs/handoff-kit/acceptance/P1.md)。
@@ -96,7 +98,11 @@ summary 不可读）与无删除 API，已在验收记录挂账。详见
 3. 版本映射：P0=0.1.x、P1=0.2.x、P2=0.3.x、P3=1.0；
    `manifest.schemaVersion` 独立演进并提供迁移器。
 4. 关键取舍记 `docs/adr/`；变更记 `CHANGELOG.md`；提交为本地提交，不 push。
+5. 文档治理：四类文档 + 冻结归档 + `node scripts/docs-check.mjs`；入口 [docs/README](docs/README.md)，
+   规则 [ADR-0002](docs/adr/0002-document-governance.md)。
 
 ## 决策索引
 
 - [ADR-0001：handoff-kit 仓库拆分与 P0 关键决策](docs/adr/0001-handoff-kit-repo-and-decisions.md)
+- [ADR-0002：文档治理](docs/adr/0002-document-governance.md)
+- [文档索引](docs/README.md) / [检查清单](docs/DOC_CHECKS.md) / [三线协调](docs/WORKSTREAMS.md)

@@ -1,5 +1,7 @@
 # Changelog
 
+<!-- docs-meta: status=current; phase=cross; verified=c275312@2026-10-22; tracks=-; supersedes=-; superseded-by=- -->
+
 格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)；
 版本按 [ROADMAP](ROADMAP.md) 阶段映射（P0 = 0.1.x）。
 

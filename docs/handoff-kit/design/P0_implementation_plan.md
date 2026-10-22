@@ -1,4 +1,6 @@
-# dsh-handoff-kit P0 实施计划（现行权威）
+# dsh-handoff-kit P0 实施计划（P0 基线，已冻结）
+
+<!-- docs-meta: status=frozen; phase=P0; verified=c275312@2026-10-22; tracks=plugins/dsh-handoff-kit/src; supersedes=-; superseded-by=- -->
 
 > 版本：v2（2026-10-22）。替代历史文档中过时条款；裁决依据见
 > [`docs/adr/0001-handoff-kit-repo-and-decisions.md`](../../adr/0001-handoff-kit-repo-and-decisions.md)。

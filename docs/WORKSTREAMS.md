@@ -23,8 +23,8 @@
 | 线 | 是什么 | 当前状态 | 权威文档 |
 |---|---|---|---|
 | **A 原定路线** | P0–P3 阶段规划与验收 | P0 done（0.1.0）；P1 done（0.2.0 + 0.2.1 清理）；P2/P3 未开始 | [ROADMAP](../ROADMAP.md)、各阶段 plan/acceptance |
-| **B 新需求（prompt-first + UI）** | 可用性：对话/工作台界面，把"对接提示词"变成第一公民 | **已对齐，未落文档、未开工** | 待建 `ADR-0003` + `P2_plan.md`；原意见 [v1 文档](handoff-kit/design/20261022_通用交接包生成器_v1.md) |
-| **C 文档治理** | 四类文档 + 冻结归档 + `docs:check` 漂移检测 | **D1/D2 已建**（骨架 + 脚本 + 首份报告）；D3 待修 | [ADR-0002](adr/0002-document-governance.md) + [索引](README.md) + [scripts/docs-check.mjs](../scripts/docs-check.mjs) |
+| **B 新需求（prompt-first + UI）** | 可用性：对话/工作台界面，把"对接提示词"变成第一公民 | **已对齐，未落文档、未开工** | 待建 `ADR-0003` + `P2_plan.md`；原意见 [v1 文档](archive/handoff-kit/20261022_通用交接包生成器_v1.md) |
+| **C 文档治理** | 四类文档 + 冻结归档 + `docs:check` 漂移检测 | **D1–D3 已建**（骨架 + 脚本 + 状态头/归档）；D4 起新需求按治理流程进入路线 | [ADR-0002](adr/0002-document-governance.md) + [索引](README.md) + [scripts/docs-check.mjs](../scripts/docs-check.mjs) |
 
 ## 2. 线 A：原定整体路线（不变的部分）
 
@@ -46,7 +46,7 @@
 
 > 有一个通用的交接包提示词；把它输入工作区 A，A 生成一段**给下一个工作区的对接提示词**；工作区 B 按这段提示词开始工作。
 
-本质：**prompt-first + 人工复制**。原意原文保存在 [v1 文档](handoff-kit/design/20261022_通用交接包生成器_v1.md)（"把本文件整段发给当前有上下文的对话……再把生成结果发到新对话"）。
+本质：**prompt-first + 人工复制**。原意原文保存在 [v1 文档](archive/handoff-kit/20261022_通用交接包生成器_v1.md)（"把本文件整段发给当前有上下文的对话……再把生成结果发到新对话"）。
 
 ### 3.2 现状与偏差
 
@@ -88,16 +88,16 @@ AI 编程文档三种偏移：**时间**（描述旧状态）、**位置**（旧
 4. **冻结/归档**：旧文档移出读路径（`docs/archive/`），文件名与首行带 `HISTORICAL` 标记；
 5. **减少需维护文档**：版本/测试数/接口等派生事实不手写；默认不新增文档，能合并就合并。
 
-### 4.3 当前仓库已发现的偏移点（待治理时修）
+### 4.3 当前仓库已发现的偏移点（D3 已修，保留为审计快照）
 
 | # | 位置 | 现状 |
 |---|---|---|
 | C1 | 根 [README](../README.md) | 插件表停在 P0 / 0.1.0；仍把 P0 START_PROMPT 当入口；目录树缺 GAPS |
-| C2 | [design/README](handoff-kit/design/README.md) | 说"现行权威 = P0 计划 + ADR"；说 P1 计划"draft 待审"；未收录 GAPS |
+| C2 | [design/README（已归档）](archive/handoff-kit/design-README.md) | 说"现行权威 = P0 计划 + ADR"；说 P1 计划"draft 待审"；未收录 GAPS |
 | C3 | [P0 计划](handoff-kit/design/P0_implementation_plan.md) | 标题仍写"（现行权威）"，实际已是历史基线 |
 | C4 | [P1 计划](handoff-kit/design/P1_plan.md) | 头部仍写"下一步 = M1 开工"；HEAD 快照停在 607e2cb |
 | C5 | [ROADMAP](../ROADMAP.md) | 测试数写 221（实际 223）；P2 未反映新需求 |
-| C6 | [START_PROMPT](handoff-kit/START_PROMPT.md) | P0 专用，仍被根 README 当新会话入口 |
+| C6 | [START_PROMPT（已归档）](archive/handoff-kit/START_PROMPT.md) | P0 专用，仍被根 README 当新会话入口 |
 | C7 | 历史 3 份文档 | 与现行文档并排放在 `design/`，未物理隔离 |
 
 ## 5. 执行顺序（已定：先治理文档，再改路线）
@@ -106,7 +106,7 @@ AI 编程文档三种偏移：**时间**（描述旧状态）、**位置**（旧
 |---|---|---|---|
 | **D1 治理骨架** | 治理约定 + 唯一索引 + 检查清单（只写文档，不动旧正文、不写代码） | [ADR-0002](adr/0002-document-governance.md)、[docs/README](README.md)、[docs/DOC_CHECKS](DOC_CHECKS.md) | **done**（2026-10-22） |
 | **D2 检查脚本** | 按清单实现零依赖 `scripts/docs-check.mjs` 并跑通 | [scripts/docs-check.mjs](../scripts/docs-check.mjs) + 首份检查报告（23 error / 0 warn / 0 stale） | **done**（2026-10-22） |
-| **D3 落地冻结归档** | 给现有 17 份文档加状态头；历史文档移入 `docs/archive/`；修 C1–C7 | 索引全绿、`docs:check` 无 error | 待开工 |
+| **D3 落地冻结归档** | 给旧文档加状态头；历史文档移入 `docs/archive/`；修 C1–C7 | 索引全绿、`docs:check` 无 error | **done**（2026-10-22） |
 | **D4 路线整合** | 新需求落文档：`ADR-0003`（prompt-first + UI）+ ROADMAP 修订记录 + `P2_plan.md` + `START_PROMPT_P2.md` | 新路线正式生效 | 待开工 |
 | **D5 UI 实现** | Client half + 宿主 RPC + 工作台/输入框入口（另行详细计划） | UI v1 + 浏览器实测 | 待开工 |
 
@@ -116,17 +116,18 @@ AI 编程文档三种偏移：**时间**（描述旧状态）、**位置**（旧
 
 - ADR 编号：治理用 `ADR-0002`、产品方向用 `ADR-0003`（建议，可换）；
 - 归档位置：`docs/archive/<插件>/` vs `docs/handoff-kit/design/history/`（建议前者）；
-- `docs:check` 运行方式：仓库根无 `package.json`，建议 `node scripts/docs-check.mjs`，不为此新建包管理；
+- `docs:check` 运行方式：已建 `node scripts/docs-check.mjs`（仓库根无 `package.json`，不为此新建包管理）；
 - D4 是否裁剪 P2 团队向内容（Agent Teams/自动快照）到 P2 后段或 P3，需要你拍板；
 - UI 的构建/刷新成本（Client half 可能需要构建产物与页面刷新）在 D5 前确认；
 - 文档检查不做"语义全对"保证，只做结构性可检测（已认可低承诺）。
 
 ## 7. 立即下一步
 
-**D3**：按 D2 首份报告修复——(1) 给 17 份旧文档补 `docs-meta` 状态头（current/frozen/historical 按分类）；(2) 修 GAPS.md 3 处、START_PROMPT.md 3 处失效链接（START_PROMPT 将归档，归档后不再检查其正文）；(3) 归档 3 份历史文档 + 旧索引 + START_PROMPT 到 `docs/archive/handoff-kit/`；(4) 修 C1–C7（根 README 插件表/入口/目录树、design/README 指向新索引、P0/P1 计划状态横幅、ROADMAP 派生事实）。目标：`docs:check` 0 error（warning 允许，D3 后另行清理）。
+**D4**：新需求正式入路线——(1) 写 `docs/adr/0003-prompt-first-and-ui.md`（prompt-first + package-backed + UI 工作台决策）；(2) 写 `docs/handoff-kit/design/P2_plan.md`（UI 工作台为首块、团队/自动化后移、交互与验收）；(3) 写 `docs/handoff-kit/START_PROMPT_P2.md`（新会话入口，取代已归档的 P0 启动词）；(4) 修订 ROADMAP P2 段（排序/门槛 + 修订记录）并更新索引。D4 完成后 `docs:check` 仍需 0 error。
 
 ## 8. 变更记录
 
 - 2026-10-22 创建：三线对齐成文（A 原路线 / B 新需求 / C 文档治理），确定执行顺序 D1→D5。
 - 2026-10-22 D1 完成：[ADR-0002](adr/0002-document-governance.md) 治理决策、[docs/README](README.md) 唯一索引、[docs/DOC_CHECKS](DOC_CHECKS.md) 检查清单；下一为 D2 脚本。
 - 2026-10-22 D2 完成：[scripts/docs-check.mjs](../scripts/docs-check.mjs)（零依赖，DC1–DC10）；首份报告 21 份文档 / 23 error（17 缺元数据 + 6 失效链接）/ 0 warning / 0 stale——全部为 D3 预期待修项；`frozen` 验收记录的历史测试数字改为豁免（DC7b 仅 current）。
+- 2026-10-22 D3 完成：17 份旧文档补 `docs-meta`；5 份历史材料（v1 方法论/P0 草案/创造模式启动词/P0 START_PROMPT/旧索引）移入 `docs/archive/handoff-kit/`；GAPS 3 处坏链修复；C1–C7 修正（根 README 插件表/入口/目录树、design 旧索引移除、P0/P1 计划状态、ROADMAP 派生事实与治理链接）；`docs:check` 由 23 error 降至 **0 error / 1 warning**（ADR-0001 冻结正文指向已归档 START_PROMPT，按规则允许）。

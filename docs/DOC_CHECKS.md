@@ -23,7 +23,7 @@
 | **DC2** | error | 索引有效性 | 索引总表每个链接目标存在且属于扫描集合（`../` 路径归一化后） | 修正路径或移除死条目 |
 | **DC3** | error | 元数据存在/格式 | 扫描集合中每份非归档 `.md` 标题后必须有 `<!-- docs-meta: ... -->`，字段齐全且枚举合法；`current`/`frozen` 必须有 `verified=<commit>@<date>`；`superseded`/`historical` 必须有 `superseded-by` 或位于 archive | 按索引 §3 模板补齐；冻结文档只补头不改正文 |
 | **DC4** | error | 状态一致性 | 索引总表登记的 status 必须与文件 `docs-meta.status` 一致；索引不得把 `docs/archive/**` 文件登记为 current/frozen | 同步索引与文档头 |
-| **DC5** | error | 链接有效性 | 文档内所有相对 Markdown 链接（`](path)`）必须解析到存在的文件；忽略 `#anchor`、`http(s)://`、`mailto:`、代码块/行内代码中的示例 | 修正或删除失效链接；归档引用改为 archive 路径 |
+| **DC5** | error / warn | 链接有效性 | 文档内所有相对 Markdown 链接（`](path)`）必须解析到存在的文件；忽略 `#anchor`、`http(s)://`、`mailto:`、代码块/行内代码中的示例。`status=current` 文档为 error；`frozen`/`historical` 文档为 warn（历史记录允许引用已归档路径，不重写正文） | 修正或删除失效链接；归档引用改为 archive 路径 |
 | **DC6a** | error | 新鲜度基线 | `status=current` 或 `frozen` 的文档，其 `verified` 中的 commit 必须存在于 git 历史 | 更新 `verified` 为真实核对过的 commit |
 | **DC6b** | warn | 新鲜度漂移 | 仅 `status=current` 且 `tracks != -` 的文档：`git diff --name-only <verified-commit>..HEAD -- <tracks>` 非空 → 标 **stale**（不自动改 status）；frozen 文档只做 DC6a，不做漂移判定（历史记录本就会落后于代码） | 重核对内容后刷新 `verified`，或降级为 frozen/historical |
 | **DC6c** | warn | 元数据滞后 | 文档文件本身在 `verified` 日期之后有提交，但 `verified` 未更新 | 确认内容仍有效后刷新 `verified` |

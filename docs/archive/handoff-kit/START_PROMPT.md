@@ -1,5 +1,7 @@
 # 创造模式会话启动提示词：dsh-handoff-kit P0 实现
 
+<!-- docs-meta: status=historical; phase=P0; verified=-; tracks=-; supersedes=-; superseded-by=docs/handoff-kit/START_PROMPT_P2.md -->
+
 > **推荐用法**：在 DSH Web 新开会话，**工作区选 `D:\repos\dsh-plugins`**，
 > **模式选「创造模式（cordis）」**——安装/回滚需要 `plugin_manager`、验收需要
 > `cordis_inspect` 工具，二者只在 cordis 预设启用（standard 模式的 plugin_manager

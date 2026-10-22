@@ -41,34 +41,35 @@
 |---|---|---|---|---|
 | [ROADMAP](../ROADMAP.md) | 当前真相 | current | P0–P3 | 阶段与状态唯一权威（D3 修 C5：测试数字/新需求待 D4 修订） |
 | [CHANGELOG](../CHANGELOG.md) | 记录 | current | 全 | 版本变更（D3 加 meta） |
-| [README](../README.md) | 当前真相 | current | 全 | 仓库说明/安装（D3 修 C1：插件表停在 P0） |
+| [README](../README.md) | 当前真相 | current | 全 | 仓库说明/安装/治理（D3 已修 C1） |
 | [WORKSTREAMS](WORKSTREAMS.md) | 当前真相 | current | cross | 三线任务协调与执行顺序 |
 | [本索引](README.md) | 当前真相 | current | cross | 唯一文档入口 |
 | [DOC_CHECKS](DOC_CHECKS.md) | 规格 | current | cross | `docs:check` 检查清单（D2 实现脚本） |
-| [ADR-0001 仓库拆分与 P0 决策](adr/0001-handoff-kit-repo-and-decisions.md) | 决策 | frozen | P0 | 仓库拆分与 P0 关键决策 20 条（D3 加 meta） |
+| [ADR-0001 仓库拆分与 P0 决策](adr/0001-handoff-kit-repo-and-decisions.md) | 决策 | frozen | P0 | 仓库拆分与 P0 关键决策 20 条（D3 已加 meta；正文指向已归档 P0 START_PROMPT，按 DC5 为允许的 warning） |
 | [ADR-0002 文档治理](adr/0002-document-governance.md) | 决策 | frozen | cross | 四类文档/冻结归档/两层检查 |
-| [P0 实施计划](handoff-kit/design/P0_implementation_plan.md) | 计划 | frozen | P0 | P0 实施基线（标题"现行权威"待 D3 改为历史基线） |
-| [P0 模块接口](handoff-kit/design/P0_module_interfaces.md) | 规格 | frozen | P0 | P0 模块级接口规格（D3 加 meta） |
-| [P1 实施计划](handoff-kit/design/P1_plan.md) | 计划 | frozen | P1 | P1 实施基线（头部"下一步 = M1"待 D3 改为已完成） |
-| [旧设计索引](handoff-kit/design/README.md) | 索引（旧） | superseded | — | 被本索引取代；D3 改为指向本文件 |
-| [通用交接包生成器 v1](handoff-kit/design/20261022_通用交接包生成器_v1.md) | 方法论 | historical | — | 用户原意 + H0–H9 方法论（D3 归档，内容仍有效） |
-| [P0 实施说明（历史草案）](handoff-kit/design/20261022_dsh-handoff-kit_P0实施说明.md) | 历史 | historical | P0 | 初版形态草案（D3 归档） |
-| [创造模式会话启动提示词（历史）](handoff-kit/design/20261022_创造模式会话启动提示词.md) | 历史 | historical | P0 | 首次会话入口（D3 归档） |
-| [START_PROMPT（P0）](handoff-kit/START_PROMPT.md) | 历史 | historical | P0 | P0 启动词；新会话入口由 D4 的 `START_PROMPT_P2.md` 接替（D3 归档/标记） |
+| [P0 实施计划](handoff-kit/design/P0_implementation_plan.md) | 计划 | frozen | P0 | P0 实施基线（D3 已改标题为"P0 基线，已冻结"） |
+| [P0 模块接口](handoff-kit/design/P0_module_interfaces.md) | 规格 | frozen | P0 | P0 模块级接口规格 |
+| [P1 实施计划](handoff-kit/design/P1_plan.md) | 计划 | frozen | P1 | P1 实施基线（D3 已改为"已完成/frozen"） |
+| [旧设计索引（历史）](archive/handoff-kit/design-README.md) | 索引（旧） | historical | — | 被本索引取代；D3 已归档 |
+| [通用交接包生成器 v1（历史）](archive/handoff-kit/20261022_通用交接包生成器_v1.md) | 方法论 | historical | — | 用户原意 + H0–H9 方法论；D3 已归档，内容仍有效 |
+| [P0 实施说明（历史草案）](archive/handoff-kit/20261022_dsh-handoff-kit_P0实施说明.md) | 历史 | historical | P0 | 初版形态草案；D3 已归档 |
+| [创造模式会话启动提示词（历史）](archive/handoff-kit/20261022_创造模式会话启动提示词.md) | 历史 | historical | P0 | 首次会话入口；D3 已归档 |
+| [START_PROMPT（P0，历史）](archive/handoff-kit/START_PROMPT.md) | 历史 | historical | P0 | P0 启动词；D3 已归档，新入口见 D4 的 `START_PROMPT_P2.md` |
 | [GAPS 挂账台账](handoff-kit/GAPS.md) | 记录 | current | P0–P1 | 缺口分类与归档记录（追加式更新） |
-| [P0 验收记录](handoff-kit/acceptance/P0.md) | 验收 | frozen | P0 | P0 L1–L3 证据（D3 加 meta；批次引用已归档见 GAPS §2） |
-| [P1 验收记录](handoff-kit/acceptance/P1.md) | 验收 | frozen | P1 | P1 M1–M3 + 0.2.1 清理证据（D3 加 meta） |
+| [P0 验收记录](handoff-kit/acceptance/P0.md) | 验收 | frozen | P0 | P0 L1–L3 证据（批次引用已归档见 GAPS §2） |
+| [P1 验收记录](handoff-kit/acceptance/P1.md) | 验收 | frozen | P1 | P1 M1–M3 + 0.2.1 清理证据 |
 | [插件 README](../plugins/dsh-handoff-kit/README.md) | 产品文档 | current | 0.2.1 | 插件使用/安装/开发说明 |
 | [handoff-pack 技能](../plugins/dsh-handoff-kit/skills/handoff-pack/SKILL.md) | 技能 | current | 0.2.1 | 模型使用交接包的流程说明 |
 
-## 5. 计划新增（尚未创建，D2/D4/D5）
+## 5. 计划新增（D4/D5；D2 脚本已建）
 
 | 计划文档 | 状态 | 产出步骤 |
 |---|---|---|
-| `scripts/docs-check.mjs`（+ 首次检查报告） | 待建 | D2 |
 | `docs/adr/0003-prompt-first-and-ui.md` | 待建 | D4（新需求决策：prompt-first + package-backed + UI 工作台） |
 | `docs/handoff-kit/design/P2_plan.md` | 待建 | D4（P2 重排后计划：UI 工作台首块） |
 | `docs/handoff-kit/START_PROMPT_P2.md` | 待建 | D4（新会话入口，取代 P0 启动词） |
+
+已建：`scripts/docs-check.mjs`（D2，规格见 [DOC_CHECKS](DOC_CHECKS.md)）；运行 `node scripts/docs-check.mjs`。
 
 ## 6. 归档规则
 

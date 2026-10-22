@@ -1,5 +1,7 @@
 # dsh-handoff-kit 挂账与边界台账
 
+<!-- docs-meta: status=current; phase=cross; verified=c275312@2026-10-22; tracks=-; supersedes=-; superseded-by=- -->
+
 > 版本：v1（2026-10-22）。本文件把 P0/P1 验收记录里的"已知缺口"统一分类，避免"挂账"语义漂移。
 > 分类：**已关闭**（已实现/实测）；**设计边界**（P0/P1 约束或宿主契约，不在本插件内修，需改计划或等宿主）；
 > **外部缺陷**（其他插件/环境，非本仓库）；**已归档**（数据类一次性清理）。
@@ -16,7 +18,7 @@
 
 ## 1. 逐条台账
 
-### P0 缺口（来源：[P0 验收记录](../acceptance/P0.md) §6）
+### P0 缺口（来源：[P0 验收记录](acceptance/P0.md) §6）
 
 | ID | 缺口 | 类别 | 状态与处置 | 复验方法 |
 |---|---|---|---|---|
@@ -33,7 +35,7 @@
 | G11 | PowerShell 默认编码读 JSON 乱码 | **已关闭** | 技能「新会话怎么读」补显式 UTF-8 提示（provider 热生效）；README 同步 | `skill(name="handoff-pack")` 正文含 `ReadAllText(...UTF8)` |
 | G12 | 任务板执行器在本 profile 启动卡片失败 | **外部缺陷** | 复现：5 张卡（含 2 张对照卡）全部 13–17ms 内失败 `Cannot read properties of undefined (reading 'signal')`；属 `@linxin666/dsh-web-all`，非本插件；失败卡已清理 | 建任意任务板卡片并 run，观察同错误；本插件不受影响（E2E 走会话/工具路径） |
 
-### P1 缺口（来源：[P1 验收记录](../acceptance/P1.md) §3/§6）
+### P1 缺口（来源：[P1 验收记录](acceptance/P1.md) §3/§6）
 
 | ID | 缺口 | 类别 | 状态与处置 | 复验方法 |
 |---|---|---|---|---|
@@ -46,7 +48,7 @@
 | M2-G2 | 宿主 git 快照上限（maxFiles/超大/二进制） | 设计边界 | 接受：`changesMaxFiles=200` 截断标记；binary/oversized 只给标记不给 diff；warning 明示 | 单测 `changes.test.js` 截断/binary/oversized |
 | M2-G3 | goal/jobs 服务可能缺失 | 设计边界（已降级） | 缺失/失败 → `available:false` + warning，不阻塞；**无当前 goal** = `available:true` + note（非错误） | 单测 `fuel.test.js`、E2E 无 goal 会话 |
 | M2-G4 | 无删除 API → E2E 批次堆积 | 设计边界 + **已归档** | 见 G3/§2 | `handoff_pack list` 数量 |
-| M2-G5 | M3 是否实现 | **决策关闭（Q1）** | 2026-10-22 评审：M3 仅接口与文档，不实现 LLM/自动写盘；合同在 [P1_plan](../design/P1_plan.md) §3.5 | `grep -rn "llm\\|turn-stopping" src/` 无运行时调用 |
+| M2-G5 | M3 是否实现 | **决策关闭（Q1）** | 2026-10-22 评审：M3 仅接口与文档，不实现 LLM/自动写盘；合同在 [P1_plan](design/P1_plan.md) §3.5 | `grep -rn "llm\\|turn-stopping" src/` 无运行时调用 |
 
 ## 2. 数据归档记录（2026-10-22）
 

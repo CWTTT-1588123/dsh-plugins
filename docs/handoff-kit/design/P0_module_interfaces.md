@@ -1,5 +1,7 @@
 # P0 模块接口规格（实现协作基线）
 
+<!-- docs-meta: status=frozen; phase=P0; verified=c275312@2026-10-22; tracks=plugins/dsh-handoff-kit/src; supersedes=-; superseded-by=- -->
+
 > 版本：v1（2026-10-22）。这是 `P0_implementation_plan.md` §3/§8 的**可执行细化**：
 > 每个模块的导出签名、数据形状、确定性规则、错误码与测试门槛。并行实现时以本文件为准；
 > 与实施计划冲突时以实施计划为准，并立即告知 Lead。

@@ -156,7 +156,13 @@ function check() {
   const today = new Date()
   for (const path of scanned) {
     const absolute = resolve(root, path)
-    const raw = readFileSync(absolute, 'utf8')
+    let raw
+    try {
+      raw = readFileSync(absolute, 'utf8')
+    } catch {
+      addError('DC3', path, 'tracked in git but missing from the worktree')
+      continue
+    }
     const meta = parseMeta(raw)
     metaByPath.set(path, meta)
     const docErrorsBefore = errors.length
@@ -227,13 +233,17 @@ function check() {
       }
     }
 
-    /* DC5 — relative links (skip code spans) */
+    /* DC5 — relative links (skip code spans); frozen/historical = warning */
     const text = stripCode(raw)
+    const linkSeverity = meta === null || meta.status === 'current' ? 'error' : 'warn'
     for (const match of text.matchAll(/\]\(([^)\s]+)\)/g)) {
       const link = match[1]
       if (link.startsWith('http') || link.startsWith('mailto:') || link.startsWith('#')) continue
       const target = resolve(dirname(absolute), link.split('#')[0])
-      if (!existsSync(target)) addError('DC5', path, `broken relative link: ${link}`)
+      if (!existsSync(target)) {
+        if (linkSeverity === 'error') addError('DC5', path, `broken relative link: ${link}`)
+        else addWarning('DC5', path, `broken relative link in ${meta?.status} doc: ${link}`)
+      }
     }
 
     void docErrorsBefore

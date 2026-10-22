@@ -1,5 +1,7 @@
 # dsh-handoff-kit P0 实施说明
 
+<!-- docs-meta: status=historical; phase=P0; verified=-; tracks=-; supersedes=-; superseded-by=docs/handoff-kit/design/P0_implementation_plan.md -->
+
 > 版本：v1（2026-10-22）
 > 状态：待创造模式会话评审；未开工
 > 目标：把“通用交接包生成器”做成 DSH 插件；P0 只做 host-only、无 UI、手动触发、用户级输出。

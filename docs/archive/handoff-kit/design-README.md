@@ -1,5 +1,7 @@
 # handoff-kit 设计文档索引
 
+<!-- docs-meta: status=historical; phase=cross; verified=-; tracks=-; supersedes=-; superseded-by=docs/README.md -->
+
 > 现行权威：[`P0_implementation_plan.md`](P0_implementation_plan.md) + [ADR-0001](../../adr/0001-handoff-kit-repo-and-decisions.md)。
 > 下列 20261022 三份为历史材料，与现行计划冲突时**以现行计划与 ADR 为准**。
 

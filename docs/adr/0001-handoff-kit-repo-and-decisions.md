@@ -1,5 +1,7 @@
 # ADR-0001：handoff-kit 仓库拆分与 P0 关键决策
 
+<!-- docs-meta: status=frozen; phase=P0; verified=c275312@2026-10-22; tracks=-; supersedes=-; superseded-by=- -->
+
 - 日期：2026-10-22
 - 状态：已接受
 - 相关：[P0 实施计划](../handoff-kit/design/P0_implementation_plan.md)、[START_PROMPT](../handoff-kit/START_PROMPT.md)

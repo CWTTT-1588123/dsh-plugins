@@ -1,7 +1,9 @@
 # dsh-handoff-kit P1 实施计划
 
+<!-- docs-meta: status=frozen; phase=P1; verified=c275312@2026-10-22; tracks=plugins/dsh-handoff-kit/src; supersedes=-; superseded-by=- -->
+
 > 版本：v1（2026-10-22，已评审）。对应 [ROADMAP](../../../ROADMAP.md) P1、[ADR-0001](../../adr/0001-handoff-kit-repo-and-decisions.md) 决策 17–19。
-> 状态：**已评审通过**（2026-10-22；Q1–Q5 决议见 §10）。下一步 = M1 开工。
+> 状态：**已完成（frozen）**——M1–M3 已实现并验收（见 [P1 验收记录](../acceptance/P1.md)）；后续变更按文档治理流程走新 ADR/新计划，不改本文件正文。
 > 证据标记：`【已核实】`=本会话用 `cordis_inspect`/源码/实测确认；`【实证】`=仓库文件引用；`【待验】`=未验证并写明验证方式；`【推断】`=基于已核实事实的推理。
 
 ## 0. 实施状态快照（单一权威）
