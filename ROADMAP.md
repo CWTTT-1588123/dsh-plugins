@@ -1,6 +1,6 @@
 # dsh-plugins ROADMAP
 
-<!-- docs-meta: status=current; phase=cross; verified=ce3cb8d@2026-10-23; tracks=-; supersedes=-; superseded-by=- -->
+<!-- docs-meta: status=current; phase=cross; verified=9781ce5@2026-10-23; tracks=-; supersedes=-; superseded-by=- -->
 
 > 本文件是插件仓库**阶段与状态的唯一权威**。规划、进度、验收均以这里为准；
 > 每阶段的设计与验收见 `docs/<插件>/{design,acceptance}/`。
@@ -13,7 +13,7 @@
 | P0 | 0.1.x | 手动生成 + 校验闭环 | **done**（0.1.0，2026-10-22） | [P0 实施计划](docs/handoff-kit/design/P0_implementation_plan.md) | [P0 验收记录](docs/handoff-kit/acceptance/P0.md) |
 | P1 | 0.2.x | 真实改动证据 + 消费闭环 + 轻自动 | **done**（0.2.0，2026-10-22；0.2.1 挂账清理） | [P1 实施计划](docs/handoff-kit/design/P1_plan.md) | [P1 验收记录](docs/handoff-kit/acceptance/P1.md) |
 | P2 | 0.3.x | UI 工作台（对接提示词优先） | **done**（0.3.0，2026-10-22；0.3.1 提示词安全修复） | [P2 计划](docs/handoff-kit/design/P2_plan.md) | [P2 验收记录](docs/handoff-kit/acceptance/P2.md) |
-| P3 | 1.0 | 规范与分发 | **进行中**（M0–M3 完成，2026-10-23；M4 待发布账号资源） | [P3 实施计划](docs/handoff-kit/design/P3_plan.md) | 进行中（M6 产出） |
+| P3 | 1.0 | 规范与分发 | **进行中**（M0–M3 完成；M4 门面/CI/UI 完成，rc.1 待发布） | [P3 实施计划](docs/handoff-kit/design/P3_plan.md) | 进行中（M6 产出） |
 
 ## P0 — 可用（0.1.x）
 
@@ -114,6 +114,8 @@ UI 点击写入，复制开场提示词 trust=verified；旧批次漂移显示 s
 > **M2 完成（2026-10-23，提交 `e3e6cba`）**：`handoff_pack action=migrate` / `/handoff migrate`——v1→v2，源批次只读且字节不变，`evidence/migration.json` 记录 provenance，`changes`/`fuel` 标 unavailable、不建 lineage；`test/migration.test.js` 覆盖负例；`npm test` 全绿。
 >
 > **M3 完成（2026-10-23，提交 `ce3cb8d`）**：零依赖 CLI `bin/handoff-kit.mjs`（`verify`/`load`/`list`/`migrate`，退出码 0/3/1/2，无网络/无子进程/无 harness 导入）；`test/cli.test.js` 真实文件系统 E2E；**非 DSH 消费演练**用 CLI 直接验证用户级真实批次（trust=verified）。M4（发布/公开门面）待 npm/GitHub 账号资源。
+>
+> **M4 门面/UI 完成（2026-10-23，提交 `62adf57`/`9781ce5`；rc.1 待发布）**：GitHub 公开仓库 + 英文根 README/`LICENSE`/YAML Issue 模板/CI（Windows 必跑，Linux/macOS 实验性非阻塞）；英文 `USAGE.en.md`；英文优先 i18n（client 内嵌 142 keys + `locale/*.json`，跟随页面/浏览器语言，中文保留）与 P2-G1 工作台项目/会话选择器；版本 `1.0.0-rc.1`；283 测试全绿、`docs:check` 0 error、CI 绿；`npm publish --tag next` 待用户确认。
 
 - `manifest@2` / `HANDOFF.md` 规范公开 + schema 迁移器；
 - 跨工具适配器（其他 agent / CLI 消费同一交接包）；
@@ -133,7 +135,8 @@ UI 点击写入，复制开场提示词 trust=verified；旧批次漂移显示 s
 2. **阶段门槛**：上阶段验收记录完整 + 回归绿 + 回滚演练通过 + 用户确认，才进入下一阶段。
 3. 版本映射：P0=0.1.x、P1=0.2.x、P2=0.3.x、P3=1.0；
    `manifest.schemaVersion` 独立演进并提供迁移器。
-4. 关键取舍记 `docs/adr/`；变更记 `CHANGELOG.md`；提交为本地提交，不 push。
+4. 关键取舍记 `docs/adr/`；变更记 `CHANGELOG.md`；P3 起源码同步到 GitHub 公开仓库
+   （`CWTTT-1588123/dsh-plugins`），push/tag/publish 需用户逐次确认，凭证不入仓库。
 5. 文档治理：四类文档 + 冻结归档 + `node scripts/docs-check.mjs`；入口 [docs/README](docs/README.md)，
    规则 [ADR-0002](docs/adr/0002-document-governance.md)。
 

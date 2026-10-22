@@ -1,6 +1,6 @@
 # dsh-handoff-kit
 
-<!-- docs-meta: status=current; phase=P2; verified=d476d2c@2026-10-23; tracks=plugins/dsh-handoff-kit/src,plugins/dsh-handoff-kit/client.js,plugins/dsh-handoff-kit/index.js,plugins/dsh-handoff-kit/package.json; supersedes=-; superseded-by=- -->
+<!-- docs-meta: status=current; phase=P2; verified=9781ce5@2026-10-23; tracks=plugins/dsh-handoff-kit/src,plugins/dsh-handoff-kit/client.js,plugins/dsh-handoff-kit/index.js,plugins/dsh-handoff-kit/package.json; supersedes=-; superseded-by=- -->
 
 Deterministic **session handoff packages** for DeepSeek Harness: one tool call writes
 `HANDOFF.md` + `manifest.json` + evidence, and a later session can **verify the hashes**
@@ -36,6 +36,15 @@ The same bundle also ships a plain-JS Client half (`client.js`, no build step). 
 - a **sidebar panel icon** and a central **交接工作台** page (`sidebar.panellist` ↔ `main` key):
   left batch list + right detail, with 刷新 / 校验 / 生成 / 继续交接 (append by default, update
   requires a second confirmation; history is never rewritten) and 返回对话.
+
+**1.0.0-rc UI additions (P3/M4).** Since `1.0.0-rc.1` the workbench is **English-first**: UI copy
+lives in the embedded EN/ZH tables and `locale/en.json` + `locale/zh.json` (kept in sync by tests);
+the language follows the page `document.lang` / browser language (`zh*` selects the retained
+Chinese copy, everything else English). The workbench header also shows an explicit **project /
+session** line — the Host-resolved project, workspace and session id, a live/fallback badge, and a
+session selector that pins a session (known sessions recorded by the 「交接」 button); fallbacks
+are surfaced instead of silently choosing a root session (P2-G1). Read-only actions still never
+write, and create/continue still require an explicit click.
 
 Data flow: the Client half calls this bundle's Host half through one authenticated same-origin
 JSON route, `POST /api/handoff-kit/rpc` (registered on `ctx.connection.fetch`). The route only

@@ -1,17 +1,47 @@
 # Changelog
 
-<!-- docs-meta: status=current; phase=cross; verified=c5fe455@2026-10-22; tracks=-; supersedes=-; superseded-by=- -->
+<!-- docs-meta: status=current; phase=cross; verified=9781ce5@2026-10-23; tracks=-; supersedes=-; superseded-by=- -->
 
 格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)；
 版本按 [ROADMAP](ROADMAP.md) 阶段映射（P0 = 0.1.x）。
 
 ## [Unreleased]
 
+## [1.0.0-rc.1] - 2026-10-23
+
+P3（1.0 平台化）首个公开候选版，A 档开源公开产品。P0–P2 运行边界不变
+（零依赖 / 无网络 / 无子进程 / 无 LLM / 历史批次不原地重写）。
+
 ### Added
 
-- [插件使用说明（标准交接流程）](plugins/dsh-handoff-kit/USAGE.md)：四步流程
-  「旧会话生成 → 新会话只粘贴提示词 → 旁证只读复核 → 新会话收到明确指令后再开工」，
-  含"不要做的事"、常见问题与跨工作区边界；明确"粘贴即安全，无需额外保险操作"。
+- **规范公开**：`spec/HANDOFF.md`、`spec/verify.md` 与 `schema/manifest.v1/v2.json`
+  （英文，1.0 草案；含批次布局、证据标签、trust 语义、finding 码与 CLI 退出码）。
+- **schema 迁移器**：`handoff_pack action=migrate` / `/handoff migrate`——v1→v2，
+  源批次只读、写新批次，`evidence/migration.json` 记录 provenance，不建血缘。
+- **跨工具零依赖 CLI**：`handoff-kit`（`verify`/`load`/`list`/`migrate`，退出码 0/3/1/2，
+  无网络/无子进程/无 harness 导入）。
+- **公开门面与分发元数据**：英文根 README、`LICENSE`（MIT）、YAML Issue 模板、
+  GitHub Actions CI（Windows 必跑 + Linux/macOS 实验性非阻塞）、英文 `USAGE.en.md`；
+  `package.json` 移除 `private` 并补 `repository`/`homepage`/`bugs`/`bin`。
+- **英文优先 UI（i18n）**：Client half 内嵌 EN/ZH 字典（142 keys，跟随页面/浏览器语言，
+  中文全文保留），`locale/en.json` 与 `locale/zh.json` 由测试强制同步。
+- **P2-G1 项目/会话选择器**：工作台显式展示 Host 解析的 project/workspace/session 与
+  live/fallback 徽章，支持会话 pin 与回退提示（复用现有只读 `state` RPC，无新 RPC）。
+- 中文使用说明 `USAGE.md`（标准四步交接流程）与其英文对照 `USAGE.en.md`。
+
+### Changed
+
+- 版本 0.3.1 → 1.0.0-rc.1；client 测试 3 → 19，总计 283。
+- 文档治理：`docs:check` 强制 `core.quotepath=false`，修复 GitHub Actions
+  （默认 `quotepath=true`）下非 ASCII 路径的 DC1/DC2/DC3 误报。
+- 平台声明：Windows 优先，macOS/Linux 实验性（CI 非阻塞）。
+
+### Known limitations
+
+- UI 语言自动跟随页面/浏览器语言，未提供界面内手动切换。
+- 会话候选来自客户端记录（Host 无枚举接口）；首次进入时下拉仅含宿主默认，
+  已用显式回退提示兜底。
+- Host 侧生成的「开场提示词」正文仍为中文（内容而非 UI chrome，1.x 再评估英文渲染）。
 
 ## [0.3.1] - 2026-10-22
 

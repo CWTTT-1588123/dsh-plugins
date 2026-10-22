@@ -1,6 +1,6 @@
 # docs:check 检查清单（规格）
 
-<!-- docs-meta: status=current; phase=cross; verified=4d04f2a@2026-10-22; tracks=scripts/docs-check.mjs; supersedes=-; superseded-by=- -->
+<!-- docs-meta: status=current; phase=cross; verified=62adf57@2026-10-23; tracks=scripts/docs-check.mjs; supersedes=-; superseded-by=- -->
 
 > 状态：**current**（D1 规格；D2 实现脚本）
 > 依据：[ADR-0002 文档治理](adr/0002-document-governance.md) §D5
@@ -13,7 +13,8 @@
 - 命令（D2 实现）：`node scripts/docs-check.mjs [--json] [--root <dir>]`；
 - 零运行时依赖；需要 `git` 可执行（DC1/DC6 用 `git ls-files`、`git diff`）；
 - 扫描集合：`git ls-files '*.md'`，排除 `docs/archive/**`（归档文件只做 DC8 归档属性检查）与任何 `node_modules/` 路径；
-- 索引来源：`docs/README.md` 的文档总表。
+- 索引来源：`docs/README.md` 的文档总表；
+- 实现注意：脚本调用 git 时强制 `-c core.quotepath=false`，避免 CI（默认 `quotepath=true`）把非 ASCII 路径 C-quote，导致扫描集合与索引/工作区不一致而误报 DC1/DC2/DC3（2026-10-23 修复）。
 
 ## 2. 检查项
 
