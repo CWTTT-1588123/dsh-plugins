@@ -12,7 +12,7 @@
 |---|---|---|---|---|---|
 | P0 | 0.1.x | 手动生成 + 校验闭环 | **done**（0.1.0，2026-10-22） | [P0 实施计划](docs/handoff-kit/design/P0_implementation_plan.md) | [P0 验收记录](docs/handoff-kit/acceptance/P0.md) |
 | P1 | 0.2.x | 真实改动证据 + 消费闭环 + 轻自动 | **done**（0.2.0，2026-10-22；0.2.1 挂账清理） | [P1 实施计划](docs/handoff-kit/design/P1_plan.md) | [P1 验收记录](docs/handoff-kit/acceptance/P1.md) |
-| P2 | 0.3.x | 协作与可视化 | 未开始 | — | — |
+| P2 | 0.3.x | UI 工作台（对接提示词优先） | **计划已批准**（2026-10-22；UI 首块，未开工） | [P2 计划](docs/handoff-kit/design/P2_plan.md) | — |
 | P3 | 1.0 | 规范与分发 | 未开始 | — | — |
 
 ## P0 — 可用（0.1.x）
@@ -68,14 +68,23 @@ summary 不可读）与无删除 API，已在验收记录挂账。详见
 已关闭/设计边界/外部缺陷/归档分类；0.2.1 已补 `changes.currentTurn`、`npm test`、
 批次归档与最终包）。
 
-## P2 — 团队/界面（0.3.x）
+## P2 — UI 工作台（0.3.x）
 
-- client 伴侣包：批次列表/预览/一键复制开场提示词/漂移徽章；
-- Agent Teams 交接（team task board + teammates 状态）；
-- 漂移监视与提醒；
-- 定时/任务结束自动快照。
+> **修订记录（2026-10-22，用户确认）**：原 P2「团队/界面」改为 **UI 工作台首块**，
+> 产品叙事回归 **prompt-first**（对接提示词是第一公民，包/证据是支撑）。
+> Agent Teams 交接、漂移监视、定时/自动快照**后移**（P2 后段或 P3，另行评审）。
+> 依据：[ADR-0003](docs/adr/0003-prompt-first-and-ui.md)。
 
-**门槛**：浏览器实测通过 + 团队场景 E2E。
+- **对话入口**：输入框左侧「交接」按钮 + 小面板（生成 / 载入），默认产出"新会话开场提示词"；
+- **工作台页**：批次列表/状态徽章/详情（verify、drift、changes、血缘）+ 生成/校验/继续交接；
+- **数据**：全部经宿主 RPC 调现有 handoff service；UI 不做业务逻辑，不直接读文件系统；
+- **v1 不做**：Agent Teams、漂移监视、自动快照、LLM 叙述、自动写盘。
+
+**设计文档**：[`docs/handoff-kit/design/P2_plan.md`](docs/handoff-kit/design/P2_plan.md)（v1，2026-10-22 已批准）
+**新会话入口**：[`docs/handoff-kit/START_PROMPT_P2.md`](docs/handoff-kit/START_PROMPT_P2.md)
+
+**门槛**：浏览器实测 UI 闭环（生成 → 复制开场提示词 → 新会话 load 得 trust）+ `docs:check` 0 error
++ 既有单测回归（数量以测试输出为准）+ 用户确认。
 
 ## P3 — 平台化（1.0）
 

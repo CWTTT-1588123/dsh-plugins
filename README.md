@@ -20,7 +20,7 @@ DeepSeek Harness（DSH）插件独立仓库。与业务项目（如 `D:\repos\st
 
 | 插件 | 阶段 | 版本 | 说明 |
 |---|---|---|---|
-| `dsh-handoff-kit` | P0–P1 done | 0.2.1 | 会话交接包生成器（HANDOFF.md + manifest@2 + 证据 + 批次血缘），host-only，无 UI；P2 计划对接提示词/UI 工作台 |
+| `dsh-handoff-kit` | P0–P1 done；P2 计划已批准 | 0.2.1 | 会话交接包生成器（HANDOFF.md + manifest@2 + 证据 + 批次血缘），host-only，无 UI；P2 做 UI 工作台（对接提示词优先） |
 
 ## 开发会话约定
 

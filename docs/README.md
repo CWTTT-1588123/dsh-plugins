@@ -39,7 +39,7 @@
 
 | 文档 | 类型 | 状态 | 阶段 | 负责范围 / 备注 |
 |---|---|---|---|---|
-| [ROADMAP](../ROADMAP.md) | 当前真相 | current | P0–P3 | 阶段与状态唯一权威（D3 修 C5：测试数字/新需求待 D4 修订） |
+| [ROADMAP](../ROADMAP.md) | 当前真相 | current | P0–P3 | 阶段与状态唯一权威（P2 已按 ADR-0003 修订） |
 | [CHANGELOG](../CHANGELOG.md) | 记录 | current | 全 | 版本变更（D3 加 meta） |
 | [README](../README.md) | 当前真相 | current | 全 | 仓库说明/安装/治理（D3 已修 C1） |
 | [WORKSTREAMS](WORKSTREAMS.md) | 当前真相 | current | cross | 三线任务协调与执行顺序 |
@@ -47,9 +47,12 @@
 | [DOC_CHECKS](DOC_CHECKS.md) | 规格 | current | cross | `docs:check` 检查清单（D2 实现脚本） |
 | [ADR-0001 仓库拆分与 P0 决策](adr/0001-handoff-kit-repo-and-decisions.md) | 决策 | frozen | P0 | 仓库拆分与 P0 关键决策 20 条（D3 已加 meta；正文指向已归档 P0 START_PROMPT，按 DC5 为允许的 warning） |
 | [ADR-0002 文档治理](adr/0002-document-governance.md) | 决策 | frozen | cross | 四类文档/冻结归档/两层检查 |
+| [ADR-0003 prompt-first + UI](adr/0003-prompt-first-and-ui.md) | 决策 | frozen | cross | P2 产品叙事（prompt-first/package-backed）与 UI 工作台决策 |
 | [P0 实施计划](handoff-kit/design/P0_implementation_plan.md) | 计划 | frozen | P0 | P0 实施基线（D3 已改标题为"P0 基线，已冻结"） |
 | [P0 模块接口](handoff-kit/design/P0_module_interfaces.md) | 规格 | frozen | P0 | P0 模块级接口规格 |
 | [P1 实施计划](handoff-kit/design/P1_plan.md) | 计划 | frozen | P1 | P1 实施基线（D3 已改为"已完成/frozen"） |
+| [P2 实施计划（UI 工作台）](handoff-kit/design/P2_plan.md) | 计划 | current | P2 | UI 工作台 v1：入口/面板/工作台页/U0–U4（D4 已批准） |
+| [P2 启动提示词](handoff-kit/START_PROMPT_P2.md) | 入口 | current | P2 | 新会话入口（取代已归档 P0 启动词；D4 建） |
 | [旧设计索引（历史）](archive/handoff-kit/design-README.md) | 索引（旧） | historical | — | 被本索引取代；D3 已归档 |
 | [通用交接包生成器 v1（历史）](archive/handoff-kit/20261022_通用交接包生成器_v1.md) | 方法论 | historical | — | 用户原意 + H0–H9 方法论；D3 已归档，内容仍有效 |
 | [P0 实施说明（历史草案）](archive/handoff-kit/20261022_dsh-handoff-kit_P0实施说明.md) | 历史 | historical | P0 | 初版形态草案；D3 已归档 |
@@ -61,15 +64,16 @@
 | [插件 README](../plugins/dsh-handoff-kit/README.md) | 产品文档 | current | 0.2.1 | 插件使用/安装/开发说明 |
 | [handoff-pack 技能](../plugins/dsh-handoff-kit/skills/handoff-pack/SKILL.md) | 技能 | current | 0.2.1 | 模型使用交接包的流程说明 |
 
-## 5. 计划新增（D4/D5；D2 脚本已建）
+## 5. 已建与计划新增
 
-| 计划文档 | 状态 | 产出步骤 |
+| 文档 | 状态 | 产出步骤 |
 |---|---|---|
-| `docs/adr/0003-prompt-first-and-ui.md` | 待建 | D4（新需求决策：prompt-first + package-backed + UI 工作台） |
-| `docs/handoff-kit/design/P2_plan.md` | 待建 | D4（P2 重排后计划：UI 工作台首块） |
-| `docs/handoff-kit/START_PROMPT_P2.md` | 待建 | D4（新会话入口，取代 P0 启动词） |
+| `scripts/docs-check.mjs`（规格 `docs/DOC_CHECKS.md`） | 已建 | D2 |
+| `docs/adr/0003-prompt-first-and-ui.md` | 已建 | D4 |
+| `docs/handoff-kit/design/P2_plan.md` | 已建 | D4 |
+| `docs/handoff-kit/START_PROMPT_P2.md` | 已建 | D4 |
 
-已建：`scripts/docs-check.mjs`（D2，规格见 [DOC_CHECKS](DOC_CHECKS.md)）；运行 `node scripts/docs-check.mjs`。
+D5 起无待建文档；实现产出（`docs/handoff-kit/acceptance/P2.md`）在 U4 收尾时创建并登记。
 
 ## 6. 归档规则
 
