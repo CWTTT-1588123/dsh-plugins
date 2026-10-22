@@ -5,6 +5,9 @@
   "description": "Deterministic session handoff packages (HANDOFF.md + manifest.json) for DeepSeek Harness",
   "type": "module",
   "main": "index.js",
+  "bin": {
+    "handoff-kit": "./bin/handoff-kit.mjs"
+  },
   "exports": {
     ".": "./index.js",
     "./client": "./client.js",
@@ -16,6 +19,7 @@
   "files": [
     "index.js",
     "client.js",
+    "bin",
     "src",
     "spec",
     "schema",
@@ -29,7 +33,8 @@
     "test": "node --test \"test/**/*.test.js\""
   },
   "engines": {
-    "dsh": ">=0.2.0 <0.3.0"
+    "dsh": ">=0.2.0 <0.3.0",
+    "node": ">=20"
   },
   "license": "MIT",
   "dsh": {

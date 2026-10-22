@@ -58,6 +58,27 @@ without a session hint the Host falls back to the newest live root session (clic
 pin the current session); lineage is shown inside H0/create results rather than a separate list
 column; no delete/archive UI; Chinese-only copy.
 
+## CLI (P3/M3)
+
+The package also ships a **zero-dependency CLI** (`bin/handoff-kit.mjs`, binary `handoff-kit`)
+that runs **outside** DeepSeek Harness — for other agents, scripts and CI, no DSH install needed:
+
+```text
+handoff-kit verify  <batchDir> [--workspace <dir>] [--json]
+handoff-kit load    <batchDir> [--workspace <dir>] [--sections|--full] [--json]
+handoff-kit list    --root <handoffRoot> [--json]
+handoff-kit migrate <batchDir> --out <newBatchDir> [--workspace <dir>] [--json]
+```
+
+- no network, no subprocess, Node >= 20; reuses the same manifest/verification/redaction modules
+  as the plugin (no second implementation of the format);
+- exit codes: `0` verified/ok, `3` stale, `1` invalid, `2` usage/IO error (frozen in
+  [`spec/verify.md`](spec/verify.md) §4);
+- `--workspace <dir>` enables git/source drift checks; without it the verifier states that drift
+  was not checked instead of assuming it clean;
+- `migrate --out` must point at a new/empty directory whose basename is a batch id
+  (`YYYYMMDDTHHmmssZ-xxxx`); the source batch is never modified.
+
 ## Output
 
 Default target is user level, so a package survives workspace resets:

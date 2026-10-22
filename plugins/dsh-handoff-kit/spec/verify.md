@@ -99,18 +99,30 @@ Consumer-level overrides (normative):
 
 ## 4. Reference CLI contract
 
-The reference CLI (M3 deliverable, `handoff-kit`) exposes the same algorithm:
+The reference CLI (M3 deliverable, `bin/handoff-kit.mjs`, binary `handoff-kit`) implements the
+same algorithm and runs **outside** DeepSeek Harness (plain Node ≥20, zero dependencies):
 
 ```text
-handoff-kit verify <batchDir> [--json]
+handoff-kit verify <batchDir> [--workspace <dir>] [--json]
+handoff-kit load   <batchDir> [--workspace <dir>] [--sections|--full] [--json]
+handoff-kit list   --root <handoffRoot> [--json]
+handoff-kit migrate <batchDir> --out <newBatchDir> [--workspace <dir>] [--json]
+handoff-kit --help | --version
 ```
+
+- `--workspace <dir>` enables git/source drift checks; without it the verifier reports that drift
+  was not checked (it never assumes the workspace is clean).
+- `verify`/`load` are read-only; `migrate` reads the source batch read-only and writes only to
+  `--out` (the output directory must be new or empty and its basename must be a batch id).
+- `--json` prints a stable machine-readable object (`{ok, batchId, dir, trust, verification, ...}`
+  for verify/load).
 
 | Exit code | Meaning |
 |---|---|
-| `0` | `verified` (no findings, no drift) |
+| `0` | `verified` / command ok |
 | `3` | `stale` (warnings and/or drift, no errors) |
-| `1` | `invalid` (manifest/artifact/lineage errors) |
-| `2` | usage / IO error (batch not found, unreadable input, bad arguments) |
+| `1` | `invalid` (manifest/artifact/lineage errors, failed migration) |
+| `2` | usage / IO error (unknown command or flag, batch directory not found, unreadable input) |
 
 `--json` output shape is a stable subset of the tool result: `{ok, batchId, dir, trust, verification:{ok, checkedAt, findings, drift, counts}, next}`. Field additions are allowed; removals/rename/severity changes are breaking and require a major version.
 
