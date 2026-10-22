@@ -3,7 +3,7 @@ name: handoff-pack
 description: 生成、校验或消费当前工作区的确定性会话交接包（HANDOFF.md + manifest.json）。
 ---
 
-<!-- docs-meta: status=current; phase=P2; verified=e3e6cba@2026-10-23; tracks=plugins/dsh-handoff-kit/src; supersedes=-; superseded-by=- -->
+<!-- docs-meta: status=current; phase=P2; verified=ce3cb8d@2026-10-23; tracks=plugins/dsh-handoff-kit/src; supersedes=-; superseded-by=- -->
 
 # handoff-pack：会话交接包
 
@@ -66,6 +66,10 @@ P0 证据缺口（如实标注）：没有 `git status`（禁子进程）、没�
 > Windows/PowerShell 读 `manifest.json` / `HANDOFF.md` 时请**显式 UTF-8**：
 > `[System.IO.File]::ReadAllText($path, [System.Text.Encoding]::UTF8)` 或 `Get-Content -Raw -Encoding utf8`。
 > 否则中文会被按 ANSI 解码、`ConvertFrom-Json` 解析失败（实测踩坑：同一批次纯读取出现乱码/解析错误，改用显式 UTF-8 后正常）。
+
+**跨工具消费（非 DSH）**：本包同时提供零依赖 CLI `handoff-kit`（`verify`/`load`/`list`/`migrate`，
+退出码 0/3/1/2，无网络/无子进程），供其他 agent、脚本与 CI 在**不装 DSH** 的情况下按同一规范消费
+交接包；契约见 `spec/verify.md` §4。本技能本身面向 DSH 内的模型路径，两者共享同一套格式实现。
 
 ## 边界
 
