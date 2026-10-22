@@ -12,7 +12,7 @@
 |---|---|---|---|---|---|
 | P0 | 0.1.x | 手动生成 + 校验闭环 | **done**（0.1.0，2026-10-22） | [P0 实施计划](docs/handoff-kit/design/P0_implementation_plan.md) | [P0 验收记录](docs/handoff-kit/acceptance/P0.md) |
 | P1 | 0.2.x | 真实改动证据 + 消费闭环 + 轻自动 | **done**（0.2.0，2026-10-22；0.2.1 挂账清理） | [P1 实施计划](docs/handoff-kit/design/P1_plan.md) | [P1 验收记录](docs/handoff-kit/acceptance/P1.md) |
-| P2 | 0.3.x | UI 工作台（对接提示词优先） | **done**（0.3.0，2026-10-22） | [P2 计划](docs/handoff-kit/design/P2_plan.md) | [P2 验收记录](docs/handoff-kit/acceptance/P2.md) |
+| P2 | 0.3.x | UI 工作台（对接提示词优先） | **done**（0.3.0，2026-10-22；0.3.1 提示词安全修复） | [P2 计划](docs/handoff-kit/design/P2_plan.md) | [P2 验收记录](docs/handoff-kit/acceptance/P2.md) |
 | P3 | 1.0 | 规范与分发 | 未开始 | — | — |
 
 ## P0 — 可用（0.1.x）
@@ -96,6 +96,12 @@ UI 点击写入，复制开场提示词 trust=verified；旧批次漂移显示 s
 
 **交付物**：`plugins/dsh-handoff-kit/client.js` + `src/ui.js`（同包 Client half + UI RPC）、
 `docs/handoff-kit/acceptance/P2.md`、CHANGELOG 0.3.0。
+
+**0.3.1 补丁（2026-10-22）**：交付后真实使用中发现并修复**开场提示词越界风险**——旧文案
+"请先读它，再继续工作"会让新会话直接开工写文件；现提示词内置强制只读门（第 0 步
+`handoff_load` 复核 + 等用户明确指令 + 禁止改文件/commit），新增回归测试。详见
+[P2 验收记录 §9 勘误](docs/handoff-kit/acceptance/P2.md)。P2 门槛与功能验收结论不变；
+版本 0.3.1、单测 245。
 
 ## P3 — 平台化（1.0）
 

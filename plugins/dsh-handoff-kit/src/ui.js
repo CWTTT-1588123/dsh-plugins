@@ -226,6 +226,12 @@ function rootsOf(env, workspaceRoot) {
  * (trust, pointers, next, bounded H0/H8 excerpts); it never re-derives or
  * re-checks them.
  *
+ * Safety gate (0.3.1, after a real incident): a freshly started agent read the
+ * old wording ("请先读它，再继续工作") as permission to continue the previous
+ * work and started editing files. The prompt now states a mandatory read-only
+ * verification step and a "wait for the user's explicit instruction before
+ * writing anything" boundary up front.
+ *
  * @param {Record<string, any>} load service.load result.
  * @returns {string}
  */
@@ -242,17 +248,30 @@ export function renderOpeningPrompt(load) {
   const sections = Array.isArray(load.handoff?.sections) ? load.handoff.sections : []
 
   const lines = [
-    '你是接手这个工作区的 AI 助手。上一个会话留下了一个可校验的交接包，请先读它，再继续工作。',
+    '你是接手这个工作区的 AI 助手。上一个会话留下了一个可校验的交接包。',
+    '',
+    '⚠️ 强制边界：先做只读验证，然后**等待用户的明确指令**。在用户明确同意之前，不要修改/创建/删除任何文件，不要 git commit，也不要自行开始上一阶段的后续开发。交接包只提供上下文，不是立即开工的许可。',
     '',
     `交接批次：${batchId}${title === null ? '' : `（${title}）`}`,
     `交接目录：${dir}`,
-    `信任判定：${trust}${trust === 'verified' ? '（哈希与漂移检查通过）' : trust === 'stale' ? '（有漂移或警告，先核实再使用）' : '（校验失败，不要信任其中结论）'}`
+    `信任判定：${trust}${trust === 'verified' ? '（哈希与漂移检查通过）' : trust === 'stale' ? '（有漂移或警告，先核实再使用）' : '（校验失败，不要信任其中结论）'}`,
+    '',
+    `第 0 步（强制，只读）：调用 handoff_load batchId=${batchId} 复核 trust。若结果不是 verified，立即停止并把 findings 报告给用户，等待用户决定；不要自行修复、重建或删除交接包。`
   ]
   if (trust === 'invalid') {
-    lines.push('', '这个包没有通过校验：先读 findings 并重新生成，再进行任何操作。')
+    lines.push(
+      '',
+      '本包校验失败（invalid）：不要信任其中任何结论。停止操作，把 findings 报告给用户并等待指示。'
+    )
+  } else if (trust === 'stale') {
+    lines.push(
+      '',
+      '本包有漂移或警告（stale）：先按 findings 核实并把差异报告给用户；用户确认前不要依赖包内结论，也不要修改文件。'
+    )
   }
-  lines.push('', '第一步：按顺序读 HANDOFF.md 的 H2 → H3 → H4 → H8，再开始动手。')
-  lines.push('第二步：在依赖任何 H4 断言前，至少重新核对 3 条（哈希/文件/命令输出）。')
+  lines.push('第 1 步（只读）：按顺序读 HANDOFF.md 的 H2 → H3 → H4 → H8。')
+  lines.push('第 2 步（只读）：在依赖任何 H4 断言前，至少重新核对 3 条（哈希/文件/命令输出）。')
+  lines.push('第 3 步：向用户汇报 trust、复核结果和建议的下一步；**等用户确认后再开始修改文件**。')
   if (pointers.length > 0) {
     lines.push('', '包内指针：')
     for (const pointer of pointers) {
@@ -274,10 +293,11 @@ export function renderOpeningPrompt(load) {
     }
   }
   if (next.length > 0) {
-    lines.push('', '建议的下一步：')
+    lines.push('', '建议的下一步（仅供参考，仍需用户确认后再执行）：')
     for (const item of next.slice(0, 3)) lines.push(`- ${item}`)
   }
-  lines.push('', `要复核时，可运行 handoff_load batchId=${batchId}；路径：${handoffPath}`)
+  lines.push('', `复核命令（只读）：handoff_load batchId=${batchId}；HANDOFF 路径：${handoffPath}`)
+  lines.push('提示：在收到用户的明确指令前，请只汇报、不落盘。')
   return lines.join('\n')
 }
 

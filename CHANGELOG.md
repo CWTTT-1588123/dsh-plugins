@@ -7,6 +7,25 @@
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-10-22
+
+提示词安全修复（0.3.0 交付后真实事故复现并修复；验收记录勘误见
+[docs/handoff-kit/acceptance/P2.md](docs/handoff-kit/acceptance/P2.md) §9）。
+
+### Fixed
+
+- **开场提示词缺少强制只读门（严重）**：新会话把旧文案"请先读它，再继续工作"理解为"立即
+  开工"，实际创建了 P3 计划文件并修改仓库文件（已被完整恢复，越界草稿移至仓库外 temp）。
+  `renderOpeningPrompt` 现在第一段即声明强制边界：先只读验证、等待用户明确指令；在用户同意前
+  禁止修改/创建/删除文件、禁止 commit、禁止自行开始上一阶段后续开发。第 0 步强制
+  `handoff_load batchId=<id>` 复核，结果非 `verified` 时立即停止并报告 findings（不自行修复/
+  重建）；"建议的下一步"降级为"仅供参考，仍需用户确认"；结尾附"只汇报、不落盘"提醒。
+  新增回归测试 `opening prompt embeds a mandatory read-only gate before any work`。
+
+### Changed
+
+- 版本 0.3.0 → 0.3.1；单测 244 → 245。
+
 ## [0.3.0] - 2026-10-22
 
 P2（0.3.x）完成首块：**prompt-first UI 工作台**。验收证据见

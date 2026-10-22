@@ -61,9 +61,9 @@
 | [GAPS 挂账台账](handoff-kit/GAPS.md) | 记录 | current | P0–P1 | 缺口分类与归档记录（追加式更新） |
 | [P0 验收记录](handoff-kit/acceptance/P0.md) | 验收 | frozen | P0 | P0 L1–L3 证据（批次引用已归档见 GAPS §2） |
 | [P1 验收记录](handoff-kit/acceptance/P1.md) | 验收 | frozen | P1 | P1 M1–M3 + 0.2.1 清理证据 |
-| [P2 验收记录](handoff-kit/acceptance/P2.md) | 验收 | frozen | P2 | P2 U0–U4/L1–L3 浏览器实测证据、已知缺口（0.3.0） |
-| [插件 README](../plugins/dsh-handoff-kit/README.md) | 产品文档 | current | 0.3.0 | 插件使用/安装/开发说明（含 P2 UI 工作台） |
-| [handoff-pack 技能](../plugins/dsh-handoff-kit/skills/handoff-pack/SKILL.md) | 技能 | current | 0.3.0 | 模型使用交接包的流程说明（P2 UI 不改变模型消费路径） |
+| [P2 验收记录](handoff-kit/acceptance/P2.md) | 验收 | frozen | P2 | P2 U0–U4/L1–L3 浏览器实测证据、已知缺口（0.3.0；§9 为 0.3.1 提示词安全勘误） |
+| [插件 README](../plugins/dsh-handoff-kit/README.md) | 产品文档 | current | 0.3.1 | 插件使用/安装/开发说明（含 P2 UI 工作台与提示词安全门） |
+| [handoff-pack 技能](../plugins/dsh-handoff-kit/skills/handoff-pack/SKILL.md) | 技能 | current | 0.3.1 | 模型使用交接包的流程说明（P2 UI 不改变模型消费路径） |
 
 ## 5. 已建与计划新增
 

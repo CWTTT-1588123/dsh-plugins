@@ -302,6 +302,13 @@ test('copy renders the opening prompt from load output and writes nothing', asyn
   assert.match(payload.value.text, /信任判定：verified/)
   assert.match(payload.value.text, /HANDOFF\.md/)
   assert.match(payload.value.text, /跑浏览器验证/)
+  // 0.3.1 safety gate: the prompt itself must demand a read-only verification
+  // and forbid file changes until the user explicitly asks.
+  assert.match(payload.value.text, /强制边界/)
+  assert.match(payload.value.text, /不要修改\/创建\/删除任何文件/)
+  assert.match(payload.value.text, /第 0 步（强制，只读）/)
+  assert.match(payload.value.text, /handoff_load batchId=20261022T023512Z-a1b2/)
+  assert.match(payload.value.text, /等用户确认后再开始修改文件/)
   assert.equal(ctx.fs.writeCount(), 0)
 })
 
@@ -315,10 +322,35 @@ test('renderOpeningPrompt marks stale and invalid packages as unsafe to trust', 
   }
   const stale = renderOpeningPrompt({ ...base, trust: 'stale' })
   assert.match(stale, /先核实/)
+  assert.match(stale, /不要修改文件/)
   const invalid = renderOpeningPrompt({ ...base, trust: 'invalid' })
   assert.match(invalid, /不要信任/)
+  assert.match(invalid, /停止操作/)
   const verified = renderOpeningPrompt({ ...base, trust: 'verified' })
   assert.match(verified, /哈希与漂移检查通过/)
+})
+
+test('opening prompt embeds a mandatory read-only gate before any work', () => {
+  // Regression for the U4 incident: a new agent read the old "请先读它，再继续工作"
+  // wording as permission to start editing files. The gate must come first and
+  // name the exact read-only call plus the wait-for-user boundary.
+  const prompt = renderOpeningPrompt({
+    batchId: '20261022T131930Z-6922',
+    displayDir: 'C:\\Users\\x\\.dsh\\handoff\\p\\b',
+    trust: 'verified',
+    pointers: [],
+    next: ['继续 P3'],
+    handoff: { path: 'HANDOFF.md', sections: [] }
+  })
+  const gateIndex = prompt.indexOf('第 0 步（强制，只读）')
+  const readIndex = prompt.indexOf('第 1 步（只读）')
+  assert.ok(gateIndex >= 0, 'gate present')
+  assert.ok(readIndex > gateIndex, 'gate precedes reading')
+  assert.match(prompt, /handoff_load batchId=20261022T131930Z-6922/)
+  assert.match(prompt, /等待用户的明确指令/)
+  assert.match(prompt, /不是立即开工的许可/)
+  assert.match(prompt, /在收到用户的明确指令前，请只汇报、不落盘/)
+  assert.match(prompt, /建议的下一步（仅供参考，仍需用户确认后再执行）/)
 })
 
 test('failureOf keeps the code, drops the duplicated prefix and attaches a remedy', () => {

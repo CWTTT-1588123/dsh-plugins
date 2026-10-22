@@ -18,7 +18,7 @@ no external network, no subprocess.
 | Skill | `handoff-pack` | When and how to generate / consume a handoff package |
 | UI (P2) | 「交接」按钮 / 浮层面板 / 工作台 | 生成、载入、复制新会话开场提示词、继续交接（同包 Client half + 宿主 `/api` RPC） |
 
-## UI workbench (P2, 0.3.0)
+## UI workbench (P2, 0.3.0; prompt safety gate 0.3.1)
 
 The same bundle also ships a plain-JS Client half (`client.js`, no build step). It registers:
 
@@ -41,6 +41,14 @@ A persistent (non-dynamic) bundle has **no `host.call`** — that builtin belong
 Cordis packages only (verified during U0). UI rules: read-only actions never write; write
 actions only run on an explicit click and show the target directory; no network beyond that
 same-origin `/api` route; no subprocess; no LLM call.
+
+**Opening-prompt safety gate (0.3.1).** A handoff prompt is context, not a work order. After a
+real incident where a freshly started agent read the old wording as permission to continue the
+previous work and started editing files, the rendered prompt now opens with a mandatory
+boundary: verify read-only first (第 0 步: `handoff_load batchId=<id>`), report the verdict, and
+**wait for the user's explicit instruction before modifying/creating/deleting any file or
+starting the next phase**. Non-`verified` verdicts must be reported and stop the session rather
+than be self-repaired. The UI generation/copy flow renders this prompt unchanged.
 
 Known P2 limitations (full list in `docs/handoff-kit/GAPS.md`): the workbench is root-scoped, so
 without a session hint the Host falls back to the newest live root session (click 「交接」 once to

@@ -11,7 +11,7 @@
 
 | 类别 | 数量 | 说明 |
 |---|---|---|
-| 已关闭 | 9 | G5/G6/G8/G10/G11、M1-G1/M1-G2/M1-G5、M3（决策关闭） |
+| 已关闭 | 10 | G5/G6/G8/G10/G11、M1-G1/M1-G2/M1-G5、M3（决策关闭）、P2-G8（0.3.1 修复） |
 | 设计边界 | 12 | G1/G2/G3/G4/G7/G9、M2-G2、M2-G1（Session 关闭部分）、P2-G1/P2-G4/P2-G5、P2-G7 |
 | 设计选择 | 2 | M1-G3（摘要指针式）、P2-G2（血缘不单列） |
 | 外部缺陷 | 1 | G12（第三方任务板执行器） |
@@ -61,6 +61,7 @@
 | P2-G4 | 无删除/归档 UI | 设计边界（宿主无删除原语） | 复用 G3 手动归档 runbook；UI 只读不提供删除 | G3 复验方法 |
 | P2-G5 | 新增 `dsh.client` 声明后需重启 Desktop 一次 | 设计边界（工具链） | 实测：client-modules 将"非 client 包"判定按 specifier 缓存到重启；声明变更后重启一次，之后 client 代码改动可 HMR 热更（无需重启） | 重启前后抓 `GET /plugins/events` 的 graph entries 是否含 `dsh-handoff-kit` |
 | P2-G7 | 包内证据覆盖 `docs/`：写验收记录本身会让刚生成的批次真实漂移；模型可见文本摘要只 1–3 行（沿用 P1-M1-G3） | 设计边界（记录自指 + P1 渲染契约） | 接受并如实记录：verified 证据以生成后、写记录前的带时间戳回执为准；需要"交付即 verified"时在文档冻结提交后最后生成一次并停止编辑被记录文件；UI 用结构化字段展示 findings/drift，不改 P1 文本渲染 | `handoff_load <batch>` 在记录编辑前后各跑一次，观察 `SOURCE_FILE_CHANGED: docs/...`；`src/tool.js::summarizeResult` |
+| P2-G8 | 开场提示词缺少强制只读门：新会话把"先读它，再继续工作"理解为立即开工，实际创建 P3 计划/修改仓库文件 | **已关闭（0.3.1）** | 修复：`renderOpeningPrompt` 首段强制边界（只读验证 + 等用户明确指令 + 禁止改文件/commit/自开新阶段），第 0 步强制 `handoff_load batchId=<id>`，非 verified 即停止；下一步降级为"仅供参考"；新增回归测试。越界草稿保留于 `%TEMP%\dsh-p3-plan-draft-20261022-214256\`，恢复后 `20ef` 复算 verified | `node --test test/ui.test.js`（`opening prompt embeds a mandatory read-only gate before any work`）；UI 复制提示词目视含安全门 |
 
 ## 2. 数据归档记录（2026-10-22）
 
