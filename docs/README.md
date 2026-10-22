@@ -65,6 +65,7 @@
 | [P2 验收记录](handoff-kit/acceptance/P2.md) | 验收 | frozen | P2 | P2 U0–U4/L1–L3 浏览器实测证据、已知缺口（0.3.0；§9 为 0.3.1 提示词安全勘误） |
 | [插件 README](../plugins/dsh-handoff-kit/README.md) | 产品文档 | current | 0.3.1 | 插件使用/安装/开发说明（含 P2 UI 工作台与提示词安全门） |
 | [插件使用说明（标准交接流程）](../plugins/dsh-handoff-kit/USAGE.md) | 使用说明 | current | 0.3.1 | 旧会话生成 → 新会话只粘贴 → 旁证只读复核 → 明确指令后开工（四步） |
+| [插件使用说明（英文）](../plugins/dsh-handoff-kit/USAGE.en.md) | 使用说明 | current | P3 | USAGE.md 英文对照（四步标准交接流程；1.0 公开门面） |
 | [交接包格式规范（英文）](../plugins/dsh-handoff-kit/spec/HANDOFF.md) | 规格 | current | P3 | 1.0 交接包格式规范：批次布局/manifest@1/2/HANDOFF 结构/证据标签/trust 语义（M1） |
 | [交接包验证规范（英文）](../plugins/dsh-handoff-kit/spec/verify.md) | 规格 | current | P3 | 1.0 验证算法：步骤/finding 码/trust 判定/CLI 退出码（M1） |
 | [handoff-pack 技能](../plugins/dsh-handoff-kit/skills/handoff-pack/SKILL.md) | 技能 | current | 0.3.1 | 模型使用交接包的流程说明（P2 UI 不改变模型消费路径） |
@@ -85,6 +86,7 @@
 | `plugins/dsh-handoff-kit/test/migration.test.js`（迁移测试） | 已建 | P3/M2（2026-10-23） |
 | `plugins/dsh-handoff-kit/bin/handoff-kit.mjs` + `src/cli.js`（零依赖 CLI） | 已建 | P3/M3（2026-10-23） |
 | `plugins/dsh-handoff-kit/test/cli.test.js`（CLI E2E） | 已建 | P3/M3（2026-10-23） |
+| `plugins/dsh-handoff-kit/USAGE.en.md`（英文使用说明） | 已建 | P3/M4（2026-10-23） |
 
 D5（P2 实现）已完成；P3 设计文档已建（`P3_plan.md`，2026-10-23 开工），无需其他待建文档。
 

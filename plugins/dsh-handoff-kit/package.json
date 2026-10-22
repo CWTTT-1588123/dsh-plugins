@@ -36,6 +36,7 @@
     "icon.svg",
     "cordis.patch.yml",
     "README.md",
+    "USAGE.en.md",
     "LICENSE"
   ],
   "scripts": {

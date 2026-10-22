@@ -10,6 +10,7 @@ no external network, no subprocess.
 
 **标准交接流程（中文使用说明）**：[USAGE.md](USAGE.md) — 旧会话生成 → 新会话只粘贴提示词 →
 旁证只读复核 → 新会话收到明确指令后再开工。**粘贴即安全，无需额外保险操作。**
+**Usage (English)**：[USAGE.en.md](USAGE.en.md) — the same standard four-step flow in English.
 
 ## What it provides
 
