@@ -1,6 +1,6 @@
 # dsh-plugins 并行工作流对齐（三线任务）
 
-<!-- docs-meta: status=current; phase=cross; verified=dda8796@2026-10-22; tracks=-; supersedes=-; superseded-by=- -->
+<!-- docs-meta: status=current; phase=cross; verified=42fdf57@2026-10-22; tracks=-; supersedes=-; superseded-by=- -->
 
 > 状态：**current**（协调文档，2026-10-22 创建）
 > 读者：用户（决策者）+ 后续 AI 会话（执行者）

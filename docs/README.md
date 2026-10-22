@@ -1,6 +1,6 @@
 # dsh-plugins 文档索引（唯一入口）
 
-<!-- docs-meta: status=current; phase=cross; verified=dda8796@2026-10-22; tracks=-; supersedes=-; superseded-by=- -->
+<!-- docs-meta: status=current; phase=cross; verified=42fdf57@2026-10-22; tracks=-; supersedes=-; superseded-by=- -->
 
 > 状态：**current**（2026-10-22 建立，D1）
 > 读者：用户 + 所有 AI 会话
@@ -29,7 +29,7 @@
 ## 3. 文档头模板（复制到每份 Markdown 标题后）
 
 ```html
-<!-- docs-meta: status=current; phase=P2; verified=dda8796@2026-10-22; tracks=plugins/dsh-handoff-kit/src,docs; supersedes=-; superseded-by=- -->
+<!-- docs-meta: status=current; phase=P2; verified=42fdf57@2026-10-22; tracks=plugins/dsh-handoff-kit/src,docs; supersedes=-; superseded-by=- -->
 ```
 
 - `current`/`frozen` 必须带 `verified`；`superseded`/`historical` 必须有 `superseded-by` 或位于 `docs/archive/`；
@@ -63,7 +63,7 @@
 | [P1 验收记录](handoff-kit/acceptance/P1.md) | 验收 | frozen | P1 | P1 M1–M3 + 0.2.1 清理证据 |
 | [P2 验收记录](handoff-kit/acceptance/P2.md) | 验收 | frozen | P2 | P2 U0–U4/L1–L3 浏览器实测证据、已知缺口（0.3.0） |
 | [插件 README](../plugins/dsh-handoff-kit/README.md) | 产品文档 | current | 0.3.0 | 插件使用/安装/开发说明（含 P2 UI 工作台） |
-| [handoff-pack 技能](../plugins/dsh-handoff-kit/skills/handoff-pack/SKILL.md) | 技能 | current | 0.2.1 | 模型使用交接包的流程说明 |
+| [handoff-pack 技能](../plugins/dsh-handoff-kit/skills/handoff-pack/SKILL.md) | 技能 | current | 0.3.0 | 模型使用交接包的流程说明（P2 UI 不改变模型消费路径） |
 
 ## 5. 已建与计划新增
 

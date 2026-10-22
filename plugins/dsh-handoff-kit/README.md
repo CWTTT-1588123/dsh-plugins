@@ -1,6 +1,6 @@
 # dsh-handoff-kit
 
-<!-- docs-meta: status=current; phase=P2; verified=c275312@2026-10-22; tracks=plugins/dsh-handoff-kit/src,plugins/dsh-handoff-kit/client.js,plugins/dsh-handoff-kit/index.js,plugins/dsh-handoff-kit/package.json; supersedes=-; superseded-by=- -->
+<!-- docs-meta: status=current; phase=P2; verified=42fdf57@2026-10-22; tracks=plugins/dsh-handoff-kit/src,plugins/dsh-handoff-kit/client.js,plugins/dsh-handoff-kit/index.js,plugins/dsh-handoff-kit/package.json; supersedes=-; superseded-by=- -->
 
 Deterministic **session handoff packages** for DeepSeek Harness: one tool call writes
 `HANDOFF.md` + `manifest.json` + evidence, and a later session can **verify the hashes**
