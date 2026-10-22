@@ -12,7 +12,8 @@
 | 类别 | 数量 | 说明 |
 |---|---|---|
 | 已关闭 | 9 | G5/G6/G8/G10/G11、M1-G1/M1-G2/M1-G5、M3（决策关闭） |
-| 设计边界 | 8 | G1/G2/G3/G4/G7/G9、M2-G2、M2-G1（Session 关闭部分） |
+| 设计边界 | 12 | G1/G2/G3/G4/G7/G9、M2-G2、M2-G1（Session 关闭部分）、P2-G1/P2-G4/P2-G5、P2-G7 |
+| 设计选择 | 2 | M1-G3（摘要指针式）、P2-G2（血缘不单列） |
 | 外部缺陷 | 1 | G12（第三方任务板执行器） |
 | 已归档（数据清理） | 12 个批次 | 见 §2；非缺陷，仅测试产物 |
 
@@ -50,6 +51,17 @@
 | M2-G4 | 无删除 API → E2E 批次堆积 | 设计边界 + **已归档** | 见 G3/§2 | `handoff_pack list` 数量 |
 | M2-G5 | M3 是否实现 | **决策关闭（Q1）** | 2026-10-22 评审：M3 仅接口与文档，不实现 LLM/自动写盘；合同在 [P1_plan](design/P1_plan.md) §3.5 | `grep -rn "llm\\|turn-stopping" src/` 无运行时调用 |
 
+### P2 缺口（来源：[P2 验收记录](acceptance/P2.md) §7）
+
+| ID | 缺口 | 类别 | 状态与处置 | 复验方法 |
+|---|---|---|---|---|
+| P2-G1 | UI 工作台是 root 作用域，无会话绑定；无 hint 时 Host 回退选"最新 live 根会话"，可能落到其它项目 | 设计边界（已缓解） | 输入框「交接」点击时写 `localStorage["dsh.handoff-kit.lastSessionId"]`，工作台优先使用；Host 再退到最新 live 根会话，最后才是部署目录。点一次「交接」即固定到当前会话；P3 可加显式项目选择器 | DevTools `localStorage.getItem('dsh.handoff-kit.lastSessionId')`；工作台副标题显示 项目/批次/会话；`src/ui.js::resolveWorkspace` |
+| P2-G2 | 批次列表/详情不单列「血缘序号」 | 设计选择 | 接受：`handoff_load` 的 manifest 摘要不含 lineage，不为 UI 改 P1 契约；lineage 批次的 H0 摘要含「批次血缘：第 N 代，承接 …」，create/append 结果也返回 `lineage` | 对 append 批次打开「载入」详情，看 H0 摘要 |
+| P2-G3 | UI 文案仅中文、未接 locale 服务 | 设计边界（v1 决策） | 接受：P2 v1 中文 UI；P3 再评估 i18n | `grep -c "zh-CN\\|中文" plugins/dsh-handoff-kit/client.js`；无 locale 注册 |
+| P2-G4 | 无删除/归档 UI | 设计边界（宿主无删除原语） | 复用 G3 手动归档 runbook；UI 只读不提供删除 | G3 复验方法 |
+| P2-G5 | 新增 `dsh.client` 声明后需重启 Desktop 一次 | 设计边界（工具链） | 实测：client-modules 将"非 client 包"判定按 specifier 缓存到重启；声明变更后重启一次，之后 client 代码改动可 HMR 热更（无需重启） | 重启前后抓 `GET /plugins/events` 的 graph entries 是否含 `dsh-handoff-kit` |
+| P2-G7 | 包内证据覆盖 `docs/`：写验收记录本身会让刚生成的批次真实漂移；模型可见文本摘要只 1–3 行（沿用 P1-M1-G3） | 设计边界（记录自指 + P1 渲染契约） | 接受并如实记录：verified 证据以生成后、写记录前的带时间戳回执为准；需要"交付即 verified"时在文档冻结提交后最后生成一次并停止编辑被记录文件；UI 用结构化字段展示 findings/drift，不改 P1 文本渲染 | `handoff_load <batch>` 在记录编辑前后各跑一次，观察 `SOURCE_FILE_CHANGED: docs/...`；`src/tool.js::summarizeResult` |
+
 ## 2. 数据归档记录（2026-10-22）
 
 无删除 API，采用**移动归档**（不删除），归档根：`%TEMP%\dsh-handoff-kit-archive\`。
@@ -61,3 +73,8 @@
 
 复验：`handoff_pack list` 应只返回保留的 3 个 user 级批次；归档目录可直接打开复查。
 **注意**：P0/P1 验收记录中引用的历史批次路径已因归档失效——这是本次清理的预期结果，验收结论本身已有测试/日志/哈希证据支撑，归档只是数据搬迁。
+
+**P2 增补（2026-10-22）**：P2 验收保留 `dsh-plugins-cb7aa4e5` 下 5 个批次作为样本
+（`69e7`/`da0b`/`43ff` 为 P0/P1 历史包；`e27c` 为 U1 生成包；`78e8` 为 U3 append 第 2 代）。
+L2 的篡改测试批次 `20261022T120000Z-dead` 为受控临时副本，验证后已删除；
+读操作零写入由整目录 hash/size/mtime 快照对照证明（见 P2 验收 §5）。

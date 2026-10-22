@@ -20,7 +20,7 @@ DeepSeek Harness（DSH）插件独立仓库。与业务项目（如 `D:\repos\st
 
 | 插件 | 阶段 | 版本 | 说明 |
 |---|---|---|---|
-| `dsh-handoff-kit` | P0–P1 done；P2 计划已批准 | 0.2.1 | 会话交接包生成器（HANDOFF.md + manifest@2 + 证据 + 批次血缘），host-only，无 UI；P2 做 UI 工作台（对接提示词优先） |
+| `dsh-handoff-kit` | P0–P2 done；P3 未开始 | 0.3.0 | 会话交接包生成器（HANDOFF.md + manifest@2 + 证据 + 批次血缘）+ **prompt-first UI 工作台**（输入框「交接」按钮 / 浮层面板 / 工作台页，数据全部经宿主 RPC 调现有 service） |
 
 ## 开发会话约定
 
@@ -35,7 +35,8 @@ plugin_manager install_bundle  target: D:\repos\dsh-plugins\plugins\dsh-handoff-
 ```
 
 新会话入口：先读 [`ROADMAP.md`](ROADMAP.md) → [`docs/README.md`](docs/README.md)（唯一索引）
-→ 当前阶段计划；P0 启动词已归档到 `docs/archive/handoff-kit/START_PROMPT.md`，新阶段启动词由 D4 生成。
+→ 当前阶段计划；P0/P2 启动词已随阶段完成冻结（`docs/archive/handoff-kit/START_PROMPT.md`、
+[`docs/handoff-kit/START_PROMPT_P2.md`](docs/handoff-kit/START_PROMPT_P2.md) 仅作历史记录）。
 
 ## 目录
 

@@ -7,6 +7,46 @@
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-22
+
+P2（0.3.x）完成首块：**prompt-first UI 工作台**。验收证据见
+[docs/handoff-kit/acceptance/P2.md](docs/handoff-kit/acceptance/P2.md)。
+
+### Added
+
+- **Client half（同包 `client.js`，纯 JS 无构建）** 四处注册：输入框左侧「交接」按钮
+  （`conversation.input.left`）、浮层小面板（`shell.overlay`）、侧栏面板图标
+  （`sidebar.panellist`↔`main` key）、中央「交接工作台」页。
+- **宿主 UI RPC**：`/api/handoff-kit/rpc`（`ctx.connection.fetch` 认证同源 JSON；持久 bundle
+  无 `host.call`，该通道仅属于动态 Cordis 包——U0 实测结论）。方法 `state` / `detail` /
+  `copy` / `create`；只做参数校验（复用 `validateToolArgs` / `validateLoadArgs`）与现有
+  `service.run()` / `service.load()` 适配，manifest 解析/校验仍只有 `src/manifest.js` 一份。
+- **「生成」Tab**：标题（当前会话标题预填）/ 备注（→ H1 summary）/ 目标 user|workspace
+  （点击前显示目标根目录）/ 附带会话改动 diff；结果展示 batchId、真实目录、证据数、warnings、
+  血缘；一键复制「新会话开场提示词」（trust 徽章 + 只读文本，复用 load 的 pointers/next 与
+  有界 H0/H1/H8 摘要）。
+- **「载入」Tab**：批次列表 → verify / drift / findings 详情 → 复制开场提示词 / 插入输入框。
+- **「工作台」页**：左批次列表 + 右详情 + 刷新 / 校验 / 生成 / 继续交接（append 默认最新、
+  update 二次确认；旧批次不被修改，写入新批次记录 lineage）。
+- 新测试：UI RPC 18 条（含真实 service 的端到端 create 回归）+ client 注册 3 条；总计
+  223 → 244。
+
+### Changed
+
+- `package.json` 新增 `dsh.client` 声明（`platform: web`、`immediately`、`inject:
+  @deepseek-ai/dsh-client-ui-conversation`）、`./client` 导出与 `files` 条目。
+- 版本 0.2.1 → 0.3.0；P0/P1 工具 API、`manifest@2`、证据模型与验收记录**未改动**。
+- UI 只读动作零写入；写操作必须用户点击并显示目标目录；不联网（仅同源 `/api`）、无子进程、
+  无 LLM 调用。
+
+### Known limitations（P2）
+
+- 工作台是 root 作用域：首次从侧栏直接打开、且本页从未点过「交接」时，Host 会话回退可能选中
+  其它项目的 live 根会话；点一次输入框「交接」（localStorage hint）后固定到当前会话（GAPS P2-G1）。
+- 批次列表/详情未单列「血缘序号」：`handoff_load` 摘要不含 lineage，不为 UI 改 P1 契约；
+  lineage 批次在 H0 摘要与 create/append 结果中可见（P2-G2）。
+- 无删除/归档 UI（宿主无删除原语）；UI 文案仅中文（P2-G3）。
+
 ## [0.2.1] - 2026-10-22
 
 挂账清理补丁（不改变 P1 功能面；台账见 [docs/handoff-kit/GAPS.md](docs/handoff-kit/GAPS.md)）。

@@ -31,7 +31,12 @@ test('package metadata matches the contracts version and bundle marker', () => {
   assert.equal(packageJson.private, true)
   assert.equal(packageJson.type, 'module')
   assert.equal(packageJson.main, 'index.js')
-  assert.deepEqual(packageJson.dsh, { bundle: { patch: './cordis.patch.yml' } })
+  assert.deepEqual(packageJson.dsh.bundle, { patch: './cordis.patch.yml' })
+  // P2: the same package carries a plain-JS Client half (no build step).
+  assert.equal(packageJson.dsh.client.platform, 'web')
+  assert.equal(packageJson.dsh.client.immediately, true)
+  assert.deepEqual(packageJson.dsh.client.inject, ['@deepseek-ai/dsh-client-ui-conversation'])
+  assert.equal(packageJson.exports['./client'], './client.js')
   assert.equal(packageJson.dependencies, undefined)
   assert.equal(packageJson.devDependencies, undefined)
 })

@@ -12,7 +12,7 @@
 |---|---|---|---|---|---|
 | P0 | 0.1.x | 手动生成 + 校验闭环 | **done**（0.1.0，2026-10-22） | [P0 实施计划](docs/handoff-kit/design/P0_implementation_plan.md) | [P0 验收记录](docs/handoff-kit/acceptance/P0.md) |
 | P1 | 0.2.x | 真实改动证据 + 消费闭环 + 轻自动 | **done**（0.2.0，2026-10-22；0.2.1 挂账清理） | [P1 实施计划](docs/handoff-kit/design/P1_plan.md) | [P1 验收记录](docs/handoff-kit/acceptance/P1.md) |
-| P2 | 0.3.x | UI 工作台（对接提示词优先） | **计划已批准**（2026-10-22；UI 首块，未开工） | [P2 计划](docs/handoff-kit/design/P2_plan.md) | — |
+| P2 | 0.3.x | UI 工作台（对接提示词优先） | **done**（0.3.0，2026-10-22） | [P2 计划](docs/handoff-kit/design/P2_plan.md) | [P2 验收记录](docs/handoff-kit/acceptance/P2.md) |
 | P3 | 1.0 | 规范与分发 | 未开始 | — | — |
 
 ## P0 — 可用（0.1.x）
@@ -80,11 +80,22 @@ summary 不可读）与无删除 API，已在验收记录挂账。详见
 - **数据**：全部经宿主 RPC 调现有 handoff service；UI 不做业务逻辑，不直接读文件系统；
 - **v1 不做**：Agent Teams、漂移监视、自动快照、LLM 叙述、自动写盘。
 
-**设计文档**：[`docs/handoff-kit/design/P2_plan.md`](docs/handoff-kit/design/P2_plan.md)（v1，2026-10-22 已批准）
-**新会话入口**：[`docs/handoff-kit/START_PROMPT_P2.md`](docs/handoff-kit/START_PROMPT_P2.md)
+**设计文档**：[`docs/handoff-kit/design/P2_plan.md`](docs/handoff-kit/design/P2_plan.md)（v1，2026-10-22 已批准并完成，现已冻结）
+**启动提示词（历史）**：[`docs/handoff-kit/START_PROMPT_P2.md`](docs/handoff-kit/START_PROMPT_P2.md)
 
 **门槛**：浏览器实测 UI 闭环（生成 → 复制开场提示词 → 新会话 load 得 trust）+ `docs:check` 0 error
 + 既有单测回归（数量以测试输出为准）+ 用户确认。
+
+**验收结论**（2026-10-22，0.3.0）：U0–U4 全部落地并经**用户在浏览器逐项点击确认**：
+输入框「交接」按钮与浮层面板（生成/载入）、侧栏图标与「交接工作台」页均实测可用；
+生成批次 `20261022T112055Z-e27c`（create）与 `20261022T113405Z-78e8`（append 第 2 代）经
+UI 点击写入，复制开场提示词 trust=verified；旧批次漂移显示 stale、篡改批次显示 invalid；
+只读动作零写入（目录哈希对照）；`docs:check` 0 error；单测 244 全绿；本地提交不 push。
+已知缺口见验收记录与 GAPS（工作台 root 作用域会话回退、血缘不单列、无删除 UI、中文 v1）。
+详见 [P2 验收记录](docs/handoff-kit/acceptance/P2.md)。
+
+**交付物**：`plugins/dsh-handoff-kit/client.js` + `src/ui.js`（同包 Client half + UI RPC）、
+`docs/handoff-kit/acceptance/P2.md`、CHANGELOG 0.3.0。
 
 ## P3 — 平台化（1.0）
 

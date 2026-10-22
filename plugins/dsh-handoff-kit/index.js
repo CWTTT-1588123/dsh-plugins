@@ -1,11 +1,12 @@
 /**
- * dsh-handoff-kit bundle entry (host-only, no Client half).
+ * dsh-handoff-kit bundle entry (Host half, plus the P2 UI bridge).
  *
  * Registers the bundle's capabilities inside one Cordis lifetime:
  *   - the `handoff_pack` tool (scan/create/verify/list),
  *   - the `handoff_load` tool (read-only consumption: trust verdict + drift + pointers),
  *   - the `/handoff` human command,
- *   - the bundled `handoff-pack` skill provider.
+ *   - the bundled `handoff-pack` skill provider,
+ *   - the UI JSON route consumed by the bundle's `client.js` workbench (P2).
  *
  * No imports from `@deepseek-ai/*`: the package has zero runtime dependencies
  * and resolves every service through the injected context.
@@ -22,6 +23,7 @@ import { createService } from './src/service.js'
 import { createLoadTool, createTool } from './src/tool.js'
 import { createCommand } from './src/command.js'
 import { createSkillProvider } from './src/skill.js'
+import { registerUiRpc } from './src/ui.js'
 
 /** Cordis plugin name. */
 export const name = PLUGIN_NAME
@@ -79,6 +81,11 @@ export function apply(ctx) {
   ctx.effect(() => ctx.tools.register(createLoadTool(service)))
   ctx.effect(() => ctx.commands.register(createCommand(service)))
   ctx.effect(() => ctx.skills.registerProvider(createSkillProvider()))
+  // P2: the Web UI half reaches this bundle's service through one
+  // authenticated `/api` route. Absent in host-only profiles, where the
+  // plugin still works through its tools/command; the route is owned by an
+  // optional child fiber on the `connection` service.
+  registerUiRpc(ctx, service, { env: process.env })
 }
 
 /** Internal exports for tests (not part of the plugin contract). */

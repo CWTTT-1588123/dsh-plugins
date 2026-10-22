@@ -1,12 +1,13 @@
 {
   "name": "dsh-handoff-kit",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "private": true,
   "description": "Deterministic session handoff packages (HANDOFF.md + manifest.json) for DeepSeek Harness",
   "type": "module",
   "main": "index.js",
   "exports": {
     ".": "./index.js",
+    "./client": "./client.js",
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./locale/*.json": "./locale/*.json",
     "./icon": "./icon.svg",
@@ -14,6 +15,7 @@
   },
   "files": [
     "index.js",
+    "client.js",
     "src",
     "skills",
     "locale/*.json",
@@ -31,6 +33,13 @@
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-conversation"
+      ]
     }
   }
 }

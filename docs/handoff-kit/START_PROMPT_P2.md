@@ -1,7 +1,11 @@
 # 创造模式会话启动提示词：dsh-handoff-kit P2（UI 工作台）
 
-<!-- docs-meta: status=current; phase=P2; verified=ca27745@2026-10-22; tracks=-; supersedes=-; superseded-by=- -->
+<!-- docs-meta: status=frozen; phase=P2; verified=ca27745@2026-10-22; tracks=-; supersedes=-; superseded-by=- -->
 
+> **状态：已冻结（P2 已完成，0.3.0）**：本文件只作为 D5 启动场景的历史记录，**不再作为新会话入口**。
+> P2 验收见 [acceptance/P2.md](acceptance/P2.md)；后续会话入口按
+> [ROADMAP](../../ROADMAP.md) 的当前阶段与 [文档索引](../README.md) 选择。
+>
 > **推荐用法**：在 DSH Web 新开会话，**工作区 `D:\repos\dsh-plugins`**、**创造模式（cordis）**、
 > **danger-full-access**；首条消息发送下面代码块，让 AI 自己读文件（不要手工粘贴全文）。
 > 生成于 2026-10-22；对应 [ROADMAP](../../ROADMAP.md) P2 与 [P2 计划](design/P2_plan.md)。

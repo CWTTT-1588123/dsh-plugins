@@ -1,10 +1,12 @@
 # dsh-handoff-kit P2 实施计划——UI 工作台（0.3.x）
 
-<!-- docs-meta: status=current; phase=P2; verified=ca27745@2026-10-22; tracks=plugins/dsh-handoff-kit; supersedes=-; superseded-by=- -->
+<!-- docs-meta: status=frozen; phase=P2; verified=ca27745@2026-10-22; tracks=plugins/dsh-handoff-kit; supersedes=-; superseded-by=- -->
 
 > 版本：v1（2026-10-22，按 [ADR-0003](../../adr/0003-prompt-first-and-ui.md) 编写）。
 > 对应 [ROADMAP](../../../ROADMAP.md) P2；前置：P0/P1 done（0.2.1）、文档治理 D1–D3 done。
-> 状态：**计划已批准，实现未开工（D5）**。新会话入口见 [START_PROMPT_P2](../START_PROMPT_P2.md)。
+> 状态：**已完成（0.3.0，2026-10-22），本文件冻结**；验收见
+> [P2 验收记录](../acceptance/P2.md)；启动提示词随阶段结束冻结
+> （[START_PROMPT_P2](../START_PROMPT_P2.md)，仅作历史记录）。
 
 ## 0. 一句话
 

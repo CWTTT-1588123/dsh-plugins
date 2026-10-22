@@ -51,8 +51,8 @@
 | [P0 实施计划](handoff-kit/design/P0_implementation_plan.md) | 计划 | frozen | P0 | P0 实施基线（D3 已改标题为"P0 基线，已冻结"） |
 | [P0 模块接口](handoff-kit/design/P0_module_interfaces.md) | 规格 | frozen | P0 | P0 模块级接口规格 |
 | [P1 实施计划](handoff-kit/design/P1_plan.md) | 计划 | frozen | P1 | P1 实施基线（D3 已改为"已完成/frozen"） |
-| [P2 实施计划（UI 工作台）](handoff-kit/design/P2_plan.md) | 计划 | current | P2 | UI 工作台 v1：入口/面板/工作台页/U0–U4（D4 已批准） |
-| [P2 启动提示词](handoff-kit/START_PROMPT_P2.md) | 入口 | current | P2 | 新会话入口（取代已归档 P0 启动词；D4 建） |
+| [P2 实施计划（UI 工作台）](handoff-kit/design/P2_plan.md) | 计划 | frozen | P2 | UI 工作台 v1：入口/面板/工作台页/U0–U4（已完成，D5 收尾冻结） |
+| [P2 启动提示词](handoff-kit/START_PROMPT_P2.md) | 入口（历史） | frozen | P2 | D5 启动场景历史记录；P2 完成后不再作为新会话入口 |
 | [旧设计索引（历史）](archive/handoff-kit/design-README.md) | 索引（旧） | historical | — | 被本索引取代；D3 已归档 |
 | [通用交接包生成器 v1（历史）](archive/handoff-kit/20261022_通用交接包生成器_v1.md) | 方法论 | historical | — | 用户原意 + H0–H9 方法论；D3 已归档，内容仍有效 |
 | [P0 实施说明（历史草案）](archive/handoff-kit/20261022_dsh-handoff-kit_P0实施说明.md) | 历史 | historical | P0 | 初版形态草案；D3 已归档 |
@@ -61,7 +61,8 @@
 | [GAPS 挂账台账](handoff-kit/GAPS.md) | 记录 | current | P0–P1 | 缺口分类与归档记录（追加式更新） |
 | [P0 验收记录](handoff-kit/acceptance/P0.md) | 验收 | frozen | P0 | P0 L1–L3 证据（批次引用已归档见 GAPS §2） |
 | [P1 验收记录](handoff-kit/acceptance/P1.md) | 验收 | frozen | P1 | P1 M1–M3 + 0.2.1 清理证据 |
-| [插件 README](../plugins/dsh-handoff-kit/README.md) | 产品文档 | current | 0.2.1 | 插件使用/安装/开发说明 |
+| [P2 验收记录](handoff-kit/acceptance/P2.md) | 验收 | frozen | P2 | P2 U0–U4/L1–L3 浏览器实测证据、已知缺口（0.3.0） |
+| [插件 README](../plugins/dsh-handoff-kit/README.md) | 产品文档 | current | 0.3.0 | 插件使用/安装/开发说明（含 P2 UI 工作台） |
 | [handoff-pack 技能](../plugins/dsh-handoff-kit/skills/handoff-pack/SKILL.md) | 技能 | current | 0.2.1 | 模型使用交接包的流程说明 |
 
 ## 5. 已建与计划新增
@@ -72,8 +73,9 @@
 | `docs/adr/0003-prompt-first-and-ui.md` | 已建 | D4 |
 | `docs/handoff-kit/design/P2_plan.md` | 已建 | D4 |
 | `docs/handoff-kit/START_PROMPT_P2.md` | 已建 | D4 |
+| `docs/handoff-kit/acceptance/P2.md` | 已建 | D5 / U4 |
 
-D5 起无待建文档；实现产出（`docs/handoff-kit/acceptance/P2.md`）在 U4 收尾时创建并登记。
+D5（P2 实现）已完成；P3 开工前按 ROADMAP 先补 P3 设计文档，无需其他待建文档。
 
 ## 6. 归档规则
 

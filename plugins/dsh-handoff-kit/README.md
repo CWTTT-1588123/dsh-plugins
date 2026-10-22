@@ -1,11 +1,12 @@
 # dsh-handoff-kit
 
-<!-- docs-meta: status=current; phase=P1; verified=c275312@2026-10-22; tracks=plugins/dsh-handoff-kit/src,plugins/dsh-handoff-kit/package.json; supersedes=-; superseded-by=- -->
+<!-- docs-meta: status=current; phase=P2; verified=c275312@2026-10-22; tracks=plugins/dsh-handoff-kit/src,plugins/dsh-handoff-kit/client.js,plugins/dsh-handoff-kit/index.js,plugins/dsh-handoff-kit/package.json; supersedes=-; superseded-by=- -->
 
 Deterministic **session handoff packages** for DeepSeek Harness: one tool call writes
 `HANDOFF.md` + `manifest.json` + evidence, and a later session can **verify the hashes**
-before trusting the claims. Host-only bundle — no UI, no Client half, no LLM, no DB,
-no network, no subprocess.
+before trusting the claims. Host half (tools/command/skill/service) plus a **prompt-first
+Client half** (0.3.0/P2) that puts generation/loading on a clickable workbench. No LLM, no DB,
+no external network, no subprocess.
 
 ## What it provides
 
@@ -15,6 +16,36 @@ no network, no subprocess.
 | Tool | `handoff_load` | Read-only consumption: verify + trust verdict + drift + pointers (P1/M1) |
 | Command | `/handoff` | Human shortcut: create (default), append, update, scan, verify, list, resume |
 | Skill | `handoff-pack` | When and how to generate / consume a handoff package |
+| UI (P2) | 「交接」按钮 / 浮层面板 / 工作台 | 生成、载入、复制新会话开场提示词、继续交接（同包 Client half + 宿主 `/api` RPC） |
+
+## UI workbench (P2, 0.3.0)
+
+The same bundle also ships a plain-JS Client half (`client.js`, no build step). It registers:
+
+- a **「交接」 button** at the left of the conversation composer (`conversation.input.left`);
+- a **floating panel** with two tabs (`shell.overlay`): **生成** — title (pre-filled from the
+  current session title) / note (→ H1 `summary`) / target `user|workspace` with the target root
+  shown **before** the click / optional session diff; the result shows `batchId`, the real
+  directory, evidence count, warnings and lineage, plus **复制开场提示词** (opening prompt with a
+  `trust=` badge and a manual-copy textarea);
+  **载入** — batch list → verify/drift/findings detail → **复制开场提示词** / **插入输入框**;
+- a **sidebar panel icon** and a central **交接工作台** page (`sidebar.panellist` ↔ `main` key):
+  left batch list + right detail, with 刷新 / 校验 / 生成 / 继续交接 (append by default, update
+  requires a second confirmation; history is never rewritten) and 返回对话.
+
+Data flow: the Client half calls this bundle's Host half through one authenticated same-origin
+JSON route, `POST /api/handoff-kit/rpc` (registered on `ctx.connection.fetch`). The route only
+validates arguments (`validateToolArgs`/`validateLoadArgs`) and adapts the **existing**
+`service.run()`/`service.load()`; manifest parsing/verification stays in `src/manifest.js`.
+A persistent (non-dynamic) bundle has **no `host.call`** — that builtin belongs to dynamic
+Cordis packages only (verified during U0). UI rules: read-only actions never write; write
+actions only run on an explicit click and show the target directory; no network beyond that
+same-origin `/api` route; no subprocess; no LLM call.
+
+Known P2 limitations (full list in `docs/handoff-kit/GAPS.md`): the workbench is root-scoped, so
+without a session hint the Host falls back to the newest live root session (click 「交接」 once to
+pin the current session); lineage is shown inside H0/create results rather than a separate list
+column; no delete/archive UI; Chinese-only copy.
 
 ## Output
 
@@ -46,6 +77,9 @@ into `evidence/files/`.
   `workspace-write` use `target=workspace`, in `read-only` generation is refused.
 - Zero runtime dependencies; the package is installed from a local directory with
   `plugin_manager install_bundle`.
+- The UI workbench needs the Web composition (the Desktop profile provides it). In a
+  host-only profile the bundle still registers its tools/command/skill; the Client half and
+  the `/api/handoff-kit/rpc` route are simply absent.
 
 ## Evidence model (P0)
 
