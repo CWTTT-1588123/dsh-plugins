@@ -3,7 +3,7 @@
  *
  * Loaded lazily by the Web module system as this package's `./client` export.
  * It registers four surfaces:
- *   - a 「交接」 button at the left of the conversation composer
+ *   - a Handoff button at the left of the conversation composer
  *     (`conversation.input.left`),
  *   - a frame-wide floating panel (`shell.overlay`),
  *   - a sidebar panel icon and its center page (`sidebar.panellist` + `main`).
@@ -13,7 +13,12 @@
  * manifests, verify hashes or read the filesystem.
  *
  * Zero dependencies: React arrives from the module table, styles use the
- * host's `--dsw-alias-*` theme tokens.
+ * host's `--dsw-alias-*` theme tokens. UI copy is English-first with Chinese
+ * kept as a complete translation; the language is chosen from
+ * `document.documentElement.lang` / `navigator.language` (zh* -> Chinese,
+ * everything else -> English). The embedded `EN_MESSAGES`/`ZH_MESSAGES`
+ * tables are mirrored into `locale/en.json` and `locale/zh.json`; a unit test
+ * keeps the three in sync so neither copy drifts.
  */
 
 window.__ModuleLoader__.load({
@@ -31,10 +36,384 @@ window.__ModuleLoader__.load({
      * live root session when this hint is stale or missing.
      */
     const SESSION_HINT_KEY = 'dsh.handoff-kit.lastSessionId'
+    /**
+     * Sessions this page has seen, newest first. P2-G1: the workbench is a
+     * root-scoped surface with no session binding of its own, so it shows an
+     * explicit project/session selector backed by this (client-only) list plus
+     * the Host's resolution; it never invents a Host project-listing method.
+     */
+    const KNOWN_SESSIONS_KEY = 'dsh.handoff-kit.knownSessions'
+    const KNOWN_SESSIONS_LIMIT = 8
     /** Shared by the sidebar row and the `main` page (layout dispatches by key). */
     const PANEL_ID = 'handoff-kit'
     const BUTTON_ID = 'handoff'
     const BUTTON_ORDER = 40
+
+    // ---------------------------------------------------------------- i18n
+    /**
+     * English UI copy (default language). Values are JSON-compatible on
+     * purpose: locale/en.json carries the same table and a test compares both.
+     * `{name}` placeholders are filled by the `t()` helper.
+     */
+    const EN_MESSAGES = /* i18n:en */ {
+      "app.title": "Handoff",
+      "app.subtitle": "Create and load session handoff packages",
+      "app.workbenchTitle": "Handoff Workbench",
+      "app.composerTitle": "Handoff: create or load handoff packages",
+      "common.close": "Close",
+      "common.cancel": "Cancel",
+      "common.refresh": "Refresh",
+      "common.refreshing": "Refreshing…",
+      "common.openWorkbench": "Open workbench",
+      "common.copyDirectory": "Copy directory",
+      "common.copyOpeningPrompt": "Copy opening prompt",
+      "common.copyAgain": "Copy again",
+      "common.buildingPrompt": "Building prompt…",
+      "common.insertIntoComposer": "Insert into composer",
+      "common.verify": "Verify",
+      "common.verifying": "Verifying…",
+      "toast.copied": "Copied",
+      "toast.copyManual": "Could not copy automatically; select the text manually",
+      "toast.directoryCopied": "Directory copied",
+      "toast.directoryCopyManual": "Could not copy automatically; select the directory manually",
+      "toast.promptCopied": "Opening prompt copied",
+      "toast.insertUnavailable": "Cannot insert: open the panel from the Handoff button in the composer",
+      "toast.inserted": "Inserted into the composer",
+      "error.requestFailed": "Request failed",
+      "error.remedy": "Fix: {text}",
+      "error.unreachable": "Cannot reach the Host service (the page or the Host may be restarting).",
+      "error.unreachableRemedy": "Refresh the page and retry; if it still fails, confirm the plugin is enabled and the page is served by this local DSH instance.",
+      "error.badResponse": "The Host returned a response that could not be parsed.",
+      "error.badResponseRemedy": "Retry; if it still fails, check the DSH logs.",
+      "error.hostRequestFailed": "Host request failed",
+      "error.retryOnce": "Retry once.",
+      "remedy.HANDOFF_READ_ONLY": "This session is read-only: switch the target to workspace or use a workspace-write session.",
+      "remedy.HANDOFF_SANDBOX_DENIED": "The Host sandbox refused this write: check the session permission or switch the target to workspace.",
+      "remedy.HANDOFF_PATH_ESCAPE": "Path escaped the allowed root: check the target and the workspace directory.",
+      "remedy.HANDOFF_BATCH_EXISTS": "That batch already exists: enable overwrite (force) or retry later.",
+      "remedy.HANDOFF_BATCH_NOT_FOUND": "No usable handoff batch found: refresh the list or create one on the Create tab first.",
+      "remedy.HANDOFF_RESUME_NOT_FOUND": "No usable handoff batch found: refresh the list or create one on the Create tab first.",
+      "remedy.HANDOFF_VERIFY_INVALID": "This batch is incomplete or failed verification: do not trust it; inspect the findings or regenerate it.",
+      "remedy.HANDOFF_APPEND_TARGET_MISSING": "There is no batch to continue yet: create one on the Create tab, then continue the handoff.",
+      "remedy.HANDOFF_LINEAGE_CYCLE": "Invalid lineage target (a batch cannot follow itself): leave it empty to use the latest batch.",
+      "remedy.HANDOFF_MIGRATION_SOURCE_INVALID": "The source batch failed verification: fix or regenerate it before migrating.",
+      "remedy.HANDOFF_MIGRATION_UNSUPPORTED_VERSION": "This schema version cannot be migrated by this build: upgrade the plugin.",
+      "remedy.HANDOFF_MANIFEST_MISSING": "This batch is incomplete or failed verification: do not trust it; inspect the findings or regenerate it.",
+      "remedy.HANDOFF_MANIFEST_INVALID": "This batch is incomplete or failed verification: do not trust it; inspect the findings or regenerate it.",
+      "remedy.HANDOFF_WRITE_FAILED": "The Host failed to read or write: check directory permissions and disk space, then retry.",
+      "remedy.HANDOFF_READ_FAILED": "The Host failed to read or write: check directory permissions and disk space, then retry.",
+      "remedy.HANDOFF_SECRET_CHECK_FAILED": "Possible secret content was detected: clean it up and create the package again.",
+      "remedy.HANDOFF_INVALID_ARGS": "Invalid arguments: check the form and retry.",
+      "remedy.HANDOFF_INTERNAL": "Host internal error: retry once; if it still fails, check the DSH logs.",
+      "tab.create": "Create",
+      "tab.load": "Load",
+      "create.titleLabel": "Title",
+      "create.titleHint": "Optional, up to 200 characters",
+      "create.titlePlaceholder": "Handoff batch title (used in the manifest / list)",
+      "create.summaryLabel": "Note",
+      "create.summaryHint": "Optional, written into the H1 narrative of HANDOFF.md",
+      "create.summaryPlaceholder": "One line about what matters in this handoff and what is unfinished",
+      "create.targetLabel": "Target",
+      "create.targetUser": "user (default, $DSH_HOME)",
+      "create.targetWorkspace": "workspace (downgrade)",
+      "create.targetRootLoading": "Target root: loading…",
+      "create.writeRoot": "Write root: {root}",
+      "create.dirNote": "Actual batch directory = root / project key / batchId; the Host computes it and shows it after creation. Nothing is written before you click.",
+      "create.includeDiffs": "Include session change diffs (≤20 files / ≤512 KiB)",
+      "create.submit": "Create handoff package",
+      "create.submitAndCopy": "Create and copy opening prompt",
+      "create.busy": "Creating…",
+      "create.busyNote": "Collecting evidence and writing the package; this can take a few seconds… (this click confirmed the write)",
+      "create.created": "Created",
+      "create.artifacts": "{count} files",
+      "create.artifactsWithBytes": "{count} files, {bytes}",
+      "create.lineageSequence": "sequence {sequence}",
+      "create.lineagePrevious": ", previous {batchId}",
+      "create.lineageSupersedes": ", supersedes {batchId}",
+      "create.warnings": "{count} warnings: {details}",
+      "field.directory": "Directory",
+      "field.evidence": "Evidence",
+      "field.lineage": "Lineage",
+      "field.title": "Title",
+      "field.verifiedAt": "Verified at",
+      "list.separator": ", ",
+      "batchlist.untitled": "(untitled)",
+      "prompt.heading": "New-session opening prompt",
+      "prompt.trustBadge": "trust={trust}",
+      "detail.loading": "Verifying: reading the package and re-checking hashes and drift…",
+      "detail.empty": "Pick a batch on the left to inspect trust / drift / findings and copy the opening prompt.",
+      "detail.counts": "errors: {errors} · warnings: {warnings}",
+      "detail.driftNotChecked": "Drift: not checked",
+      "detail.driftChanged": "Drift: gitHead {head} · {changed} source files changed · {missing} missing",
+      "detail.driftHeadChanged": "changed",
+      "detail.driftHeadUnchanged": "unchanged",
+      "detail.driftClean": "Drift: none (gitHead unchanged, source hashes match)",
+      "detail.findingsTitle": "Findings ({count})",
+      "detail.findingsMore": "and {count} more…",
+      "detail.warningsTitle": "Package warnings ({count}): ",
+      "detail.nextSteps": "Next steps",
+      "load.loadingBatches": "Reading batches…",
+      "load.empty": "No batches yet. Switch to Create to make your first handoff package.",
+      "continue.title": "Continue handoff",
+      "continue.subtitle": "Writes a new batch; older batches are never modified",
+      "continue.appendChoice": "append (continue the latest)",
+      "continue.updateChoice": "update (mark supersedes)",
+      "continue.updateNote": "Creates a new generation and records supersedes for the latest batch; the old batch stays untouched and read-only. Requires a second confirmation.",
+      "continue.appendNote": "Appends a generation after the latest batch (lineage.previous); the old batch stays untouched.",
+      "continue.baseBatch": "Base batch",
+      "continue.noBatch": "(no batch available)",
+      "continue.writeRoot": "Write root",
+      "continue.dirNote": "The Host derives the actual batch directory from the project key and shows it after the write. Nothing is written before you click.",
+      "continue.titleLabel": "Title",
+      "continue.titleHint": "Optional",
+      "continue.titlePlaceholder": "Title for this generation (optional)",
+      "continue.summaryLabel": "Note",
+      "continue.summaryHint": "Optional, written into H1",
+      "continue.includeDiffs": "Include session change diffs",
+      "continue.written": "New batch written",
+      "continue.generation": "Generation {sequence}",
+      "continue.viewBatch": "View this batch",
+      "continue.confirmNote": "Second confirmation: a new supersedes batch will be created; the old batch is kept read-only.",
+      "continue.confirmUpdate": "Continue handoff (update)",
+      "continue.confirmWrite": "Confirm write ({mode})",
+      "continue.writing": "Writing…",
+      "panel.summaryLoading": "Loading…",
+      "panel.project": "Project {name}",
+      "panel.batches": "· {count} batches",
+      "workbench.backToConversation": "Back to conversation",
+      "workbench.description": "A handoff package is the evidence behind the new-session opening prompt; write actions (create / continue) show the target directory first and run only after you click.",
+      "workbench.sessionUnbound": "unbound",
+      "selector.title": "Project / session",
+      "selector.hint": "Choose the session whose workspace this workbench reads and writes; the project follows the session. Host default resolves the newest live session.",
+      "selector.hostDefault": "Host default (newest live session)",
+      "selector.knownEmpty": "No session recorded yet: open a conversation, click Handoff once, then return here.",
+      "selector.project": "Project",
+      "selector.workspace": "Workspace",
+      "selector.session": "Session",
+      "selector.value": "{label}: {value}",
+      "selector.live": "live",
+      "selector.fallbackBadge": "Host fallback",
+      "selector.noticeImplicit": "This workbench is not explicitly bound: the Host resolved session {id}, so reads and writes use {cwd}. Choose a session above to pin it.",
+      "selector.noticeFallback": "No live session is bound, so the Host falls back to {cwd}. Choose a session above (or open a conversation and click Handoff) to pin this workbench.",
+      "selector.noticeStale": "Session {pinned} is not live; the Host resolved {resolved} instead. Pick a live session above or use Host default.",
+      "selector.optionWithTitle": "{title} · {id}",
+      "selector.optionNoTitle": "{id}"
+    }
+    /** Chinese UI copy: the original pre-i18n wire copy, kept in full. */
+    const ZH_MESSAGES = /* i18n:zh */ {
+      "app.title": "交接",
+      "app.subtitle": "生成 / 载入会话交接包",
+      "app.workbenchTitle": "交接工作台",
+      "app.composerTitle": "交接：生成 / 载入交接包",
+      "common.close": "关闭",
+      "common.cancel": "取消",
+      "common.refresh": "刷新",
+      "common.refreshing": "刷新中…",
+      "common.openWorkbench": "打开工作台",
+      "common.copyDirectory": "复制目录",
+      "common.copyOpeningPrompt": "复制开场提示词",
+      "common.copyAgain": "再次复制",
+      "common.buildingPrompt": "正在生成提示词…",
+      "common.insertIntoComposer": "插入输入框",
+      "common.verify": "校验",
+      "common.verifying": "校验中…",
+      "toast.copied": "已复制",
+      "toast.copyManual": "无法自动复制，请手动选择文本",
+      "toast.directoryCopied": "目录已复制",
+      "toast.directoryCopyManual": "无法自动复制，请手动选择目录",
+      "toast.promptCopied": "开场提示词已复制",
+      "toast.insertUnavailable": "无法插入：请从输入框「交接」按钮打开面板",
+      "toast.inserted": "已插入输入框",
+      "error.requestFailed": "请求失败",
+      "error.remedy": "修法：{text}",
+      "error.unreachable": "无法连接宿主服务（页面或宿主可能正在重启）。",
+      "error.unreachableRemedy": "刷新页面后重试；若仍失败，确认插件已启用且页面由本机 DSH 提供。",
+      "error.badResponse": "宿主返回了无法解析的响应。",
+      "error.badResponseRemedy": "重试；仍失败时查看 DSH 日志。",
+      "error.hostRequestFailed": "宿主请求失败",
+      "error.retryOnce": "重试一次。",
+      "remedy.HANDOFF_READ_ONLY": "当前会话权限是只读：改用 target=workspace 或切换到 workspace-write 再试。",
+      "remedy.HANDOFF_SANDBOX_DENIED": "宿主的沙箱拒绝了这次写入：检查会话权限，或把目标切到 workspace。",
+      "remedy.HANDOFF_PATH_ESCAPE": "路径越界：检查 target 与工作区目录。",
+      "remedy.HANDOFF_BATCH_EXISTS": "该批次已存在：勾选「覆盖（force）」或稍后重试。",
+      "remedy.HANDOFF_BATCH_NOT_FOUND": "没有找到可用的交接批次：刷新列表，或先在「生成」里创建一包。",
+      "remedy.HANDOFF_RESUME_NOT_FOUND": "没有找到可用的交接批次：刷新列表，或先在「生成」里创建一包。",
+      "remedy.HANDOFF_VERIFY_INVALID": "该批次的包不完整或校验失败：不要直接信任，查看 findings 或重新生成。",
+      "remedy.HANDOFF_APPEND_TARGET_MISSING": "没有可继续的目标批次：先在「生成」里创建一包，再继续交接。",
+      "remedy.HANDOFF_LINEAGE_CYCLE": "血缘目标不合法（不能串到自己）：留空以使用最新批次。",
+      "remedy.HANDOFF_MIGRATION_SOURCE_INVALID": "源批次未通过校验：修复或重新生成后再迁移。",
+      "remedy.HANDOFF_MIGRATION_UNSUPPORTED_VERSION": "该 schema 版本无法由当前版本迁移：请升级插件。",
+      "remedy.HANDOFF_MANIFEST_MISSING": "该批次的包不完整或校验失败：不要直接信任，查看 findings 或重新生成。",
+      "remedy.HANDOFF_MANIFEST_INVALID": "该批次的包不完整或校验失败：不要直接信任，查看 findings 或重新生成。",
+      "remedy.HANDOFF_WRITE_FAILED": "宿主读写失败：检查目录权限与磁盘空间后重试。",
+      "remedy.HANDOFF_READ_FAILED": "宿主读写失败：检查目录权限与磁盘空间后重试。",
+      "remedy.HANDOFF_SECRET_CHECK_FAILED": "检测到疑似密钥内容：清理后重新生成。",
+      "remedy.HANDOFF_INVALID_ARGS": "参数不合法：检查表单内容后重试。",
+      "remedy.HANDOFF_INTERNAL": "宿主内部错误：重试一次；仍失败时查看 DSH 日志。",
+      "tab.create": "生成",
+      "tab.load": "载入",
+      "create.titleLabel": "标题",
+      "create.titleHint": "可选，最多 200 字",
+      "create.titlePlaceholder": "交接批次标题（用于 manifest / 列表）",
+      "create.summaryLabel": "备注",
+      "create.summaryHint": "可选，写进 HANDOFF 的 H1 叙述",
+      "create.summaryPlaceholder": "一句话说明这次交接的重点 / 未完成事项",
+      "create.targetLabel": "目标",
+      "create.targetUser": "user（默认，$DSH_HOME）",
+      "create.targetWorkspace": "workspace（降级）",
+      "create.targetRootLoading": "目标根目录：读取中…",
+      "create.writeRoot": "写入根目录：{root}",
+      "create.dirNote": "实际批次目录 = 根目录 / 项目 key / batchId，由宿主计算并在生成后显示；点击前不会写盘。",
+      "create.includeDiffs": "附带会话改动 diff（≤20 文件 / ≤512 KiB）",
+      "create.submit": "生成交接包",
+      "create.submitAndCopy": "生成并复制开场提示词",
+      "create.busy": "正在生成…",
+      "create.busyNote": "正在采集证据并写入交接包，可能需要几秒…（写操作已由这次点击确认）",
+      "create.created": "已生成",
+      "create.artifacts": "{count} 个文件",
+      "create.artifactsWithBytes": "{count} 个文件，{bytes}",
+      "create.lineageSequence": "sequence {sequence}",
+      "create.lineagePrevious": "，previous {batchId}",
+      "create.lineageSupersedes": "，supersedes {batchId}",
+      "create.warnings": "{count} 条警告：{details}",
+      "field.directory": "目录",
+      "field.evidence": "证据",
+      "field.lineage": "血缘",
+      "field.title": "标题",
+      "field.verifiedAt": "校验于",
+      "list.separator": "；",
+      "batchlist.untitled": "（无标题）",
+      "prompt.heading": "新会话开场提示词",
+      "prompt.trustBadge": "trust={trust}",
+      "detail.loading": "正在校验：读包 + 重算哈希与漂移…",
+      "detail.empty": "从左侧选择一个批次，查看 trust / drift / findings，并复制开场提示词。",
+      "detail.counts": "{errors} 错误 / {warnings} 警告",
+      "detail.driftNotChecked": "漂移：未执行漂移检查",
+      "detail.driftChanged": "漂移：gitHead {head} · 源文件变化 {changed} · 缺失 {missing}",
+      "detail.driftHeadChanged": "已变",
+      "detail.driftHeadUnchanged": "未变",
+      "detail.driftClean": "漂移：无（gitHead 未变，源文件哈希一致）",
+      "detail.findingsTitle": "findings（{count}）",
+      "detail.findingsMore": "还有 {count} 条…",
+      "detail.warningsTitle": "包内警告（{count}）：",
+      "detail.nextSteps": "下一步",
+      "load.loadingBatches": "正在读取批次…",
+      "load.empty": "还没有批次。先切到「生成」创建第一包交接。",
+      "continue.title": "继续交接",
+      "continue.subtitle": "写入新批次；旧批次不被修改",
+      "continue.appendChoice": "append（承接最新）",
+      "continue.updateChoice": "update（标记 supersedes）",
+      "continue.updateNote": "新建一代并记录 supersedes 最新批次；旧批次保持原样，不会被改写。需要二次确认。",
+      "continue.appendNote": "承接最新批次追加一代（lineage.previous）；旧批次保持原样。",
+      "continue.baseBatch": "基准批次",
+      "continue.noBatch": "（无可用批次）",
+      "continue.writeRoot": "写入根目录",
+      "continue.dirNote": "实际批次目录由宿主按项目 key 生成，写入完成后显示；点击前不会写盘。",
+      "continue.titleLabel": "标题",
+      "continue.titleHint": "可选",
+      "continue.titlePlaceholder": "这一代的标题（可选）",
+      "continue.summaryLabel": "备注",
+      "continue.summaryHint": "可选，写进 H1",
+      "continue.includeDiffs": "附带会话改动 diff",
+      "continue.written": "已写入新批次",
+      "continue.generation": "第 {sequence} 代",
+      "continue.viewBatch": "查看该批次",
+      "continue.confirmNote": "二次确认：将新建一个 supersedes 批次，旧批次只读保留。",
+      "continue.confirmUpdate": "继续交接（update）",
+      "continue.confirmWrite": "确认写入（{mode}）",
+      "continue.writing": "正在写入…",
+      "panel.summaryLoading": "读取中…",
+      "panel.project": "项目 {name}",
+      "panel.batches": "· {count} 个批次",
+      "workbench.backToConversation": "返回对话",
+      "workbench.description": "交接包是“新会话开场提示词”的后端证据；写操作（生成 / 继续交接）会先显示目标目录并在点击后执行。",
+      "workbench.sessionUnbound": "未绑定",
+      "selector.title": "项目 / 会话",
+      "selector.hint": "选择本工作台读写的工作区所属会话；项目随会话确定。选「宿主默认」则由宿主解析最新活动会话。",
+      "selector.hostDefault": "宿主默认（最新活动会话）",
+      "selector.knownEmpty": "尚未记录会话：打开一个对话点一次「交接」，再回到这里。",
+      "selector.project": "项目",
+      "selector.workspace": "工作区",
+      "selector.session": "会话",
+      "selector.value": "{label}：{value}",
+      "selector.live": "在线",
+      "selector.fallbackBadge": "宿主回退",
+      "selector.noticeImplicit": "本工作台未显式绑定会话：宿主解析到会话 {id}，读写都使用 {cwd}。请在上方选择一个会话以固定。",
+      "selector.noticeFallback": "未绑定活动会话，宿主回退到 {cwd}。请在上方选择会话（或在对话里点一次「交接」）以固定本工作台。",
+      "selector.noticeStale": "会话 {pinned} 已不在线；宿主改用了 {resolved}。请在上方选择在线会话或改用宿主默认。",
+      "selector.optionWithTitle": "{title} · {id}",
+      "selector.optionNoTitle": "{id}"
+    }
+    const MESSAGES = { en: EN_MESSAGES, zh: ZH_MESSAGES }
+
+    /** Pick `zh` for a `zh*` tag, `en` otherwise; `null` when the tag is empty. */
+    function localeFromTag(tag) {
+      if (typeof tag !== 'string' || tag === '') return null
+      return tag.toLowerCase().startsWith('zh') ? 'zh' : 'en'
+    }
+
+    /**
+     * Resolve the UI language from the page/browser.
+     * `document.documentElement.lang` wins when the shell sets it; otherwise
+     * `navigator.languages` then `navigator.language` decide. Unknown -> en.
+     * @param {any} [nav] navigator (injectable for tests)
+     * @param {any} [doc] document (injectable for tests)
+     */
+    function detectLocale(nav, doc) {
+      try {
+        const fromDocument = doc !== undefined && doc !== null && doc.documentElement ? localeFromTag(doc.documentElement.lang) : null
+        if (fromDocument !== null) return fromDocument
+      } catch {
+        /* a restricted document object must not break the UI */
+      }
+      try {
+        if (nav !== undefined && nav !== null) {
+          if (Array.isArray(nav.languages)) {
+            for (const tag of nav.languages) {
+              const fromTag = localeFromTag(tag)
+              if (fromTag !== null) return fromTag
+            }
+          }
+          const fromLanguage = localeFromTag(nav.language)
+          if (fromLanguage !== null) return fromLanguage
+        }
+      } catch {
+        /* the same applies to navigator */
+      }
+      return 'en'
+    }
+
+    const currentLocale = detectLocale(
+      typeof navigator === 'undefined' ? undefined : navigator,
+      typeof document === 'undefined' ? undefined : document
+    )
+
+    /**
+     * Render one message in a given locale, filling `{name}` placeholders.
+     * Missing keys fall back to the English table, then to the key itself.
+     * @param {'en'|'zh'} locale
+     * @param {string} key
+     * @param {Record<string, unknown>} [vars]
+     */
+    function formatMessage(locale, key, vars) {
+      const table = locale === 'zh' ? ZH_MESSAGES : EN_MESSAGES
+      const template = Object.prototype.hasOwnProperty.call(table, key) ? table[key] : EN_MESSAGES[key]
+      if (typeof template !== 'string') return key
+      if (vars === undefined || vars === null) return template
+      return template.replace(/\{([A-Za-z0-9_]+)\}/g, (match, name) =>
+        vars[name] === undefined || vars[name] === null ? match : String(vars[name])
+      )
+    }
+
+    /** Translate a UI key in the current language. */
+    function t(key, vars) {
+      return formatMessage(currentLocale, key, vars)
+    }
+
+    /** Whether the English table defines a key (tests rely on full parity). */
+    function hasMessage(key) {
+      return Object.prototype.hasOwnProperty.call(EN_MESSAGES, key)
+    }
 
     // ---------------------------------------------------------------- theme
     const T = {
@@ -141,25 +520,21 @@ window.__ModuleLoader__.load({
           body: JSON.stringify({ protocol: PROTOCOL, method, params: params ?? {} })
         })
       } catch {
-        throw uiError(
-          'HANDOFF_UI_UNREACHABLE',
-          '无法连接宿主服务（页面或宿主可能正在重启）。',
-          '刷新页面后重试；若仍失败，确认插件已启用且页面由本机 DSH 提供。'
-        )
+        throw uiError('HANDOFF_UI_UNREACHABLE', t('error.unreachable'), t('error.unreachableRemedy'))
       }
       const text = await response.text()
       let payload = null
       try {
         payload = text === '' ? null : JSON.parse(text)
       } catch {
-        throw uiError('HANDOFF_UI_BAD_RESPONSE', '宿主返回了无法解析的响应。', '重试；仍失败时查看 DSH 日志。')
+        throw uiError('HANDOFF_UI_BAD_RESPONSE', t('error.badResponse'), t('error.badResponseRemedy'))
       }
       if (payload !== null && payload.ok === true) return payload.value
       const failure = payload !== null && typeof payload === 'object' ? payload.error : undefined
       throw uiError(
         failure !== undefined && typeof failure.code === 'string' ? failure.code : `HTTP_${response.status}`,
-        failure !== undefined && typeof failure.message === 'string' ? failure.message : '宿主请求失败',
-        failure !== undefined && typeof failure.remedy === 'string' ? failure.remedy : '重试一次。'
+        failure !== undefined && typeof failure.message === 'string' ? failure.message : t('error.hostRequestFailed'),
+        failure !== undefined && typeof failure.remedy === 'string' ? failure.remedy : t('error.retryOnce')
       )
     }
 
@@ -183,6 +558,159 @@ window.__ModuleLoader__.load({
       const params = {}
       if (typeof store.sessionId === 'string' && store.sessionId !== '') params.sessionId = store.sessionId
       return params
+    }
+
+    // ---------------------------------------- project / session selection (P2-G1)
+    /** @returns {Storage|null} the browser store, or null when unavailable. */
+    function storageRef() {
+      try {
+        return typeof window !== 'undefined' && window.localStorage ? window.localStorage : null
+      } catch {
+        return null
+      }
+    }
+
+    /** Read one storage value; private mode / disabled storage must not throw. */
+    function storageGet(storage, key) {
+      try {
+        return storage === null || storage === undefined ? null : storage.getItem(key)
+      } catch {
+        return null
+      }
+    }
+
+    function storageSet(storage, key, value) {
+      try {
+        if (storage !== null && storage !== undefined) storage.setItem(key, value)
+      } catch {
+        /* storage unavailable: the in-memory pin still applies to this tab */
+      }
+    }
+
+    function storageRemove(storage, key) {
+      try {
+        if (storage !== null && storage !== undefined) storage.removeItem(key)
+      } catch {
+        /* ignore */
+      }
+    }
+
+    /**
+     * Sessions this workbench may bind to, newest first. They are recorded when
+     * the composer button opens: the Host exposes no project/session listing
+     * method, so the selector must not invent one.
+     * @param {Storage|null} [storage]
+     * @returns {{id: string, title: string}[]}
+     */
+    function knownSessions(storage) {
+      const resolved = storage === undefined ? storageRef() : storage
+      const raw = storageGet(resolved, KNOWN_SESSIONS_KEY)
+      if (raw === null || raw === '') return []
+      let parsed
+      try {
+        parsed = JSON.parse(raw)
+      } catch {
+        return []
+      }
+      if (!Array.isArray(parsed)) return []
+      const seen = new Set()
+      const sessions = []
+      for (const entry of parsed) {
+        if (entry === null || typeof entry !== 'object') continue
+        const id = typeof entry.id === 'string' ? entry.id : ''
+        if (id === '' || seen.has(id)) continue
+        seen.add(id)
+        sessions.push({ id, title: typeof entry.title === 'string' ? entry.title : '' })
+        if (sessions.length >= KNOWN_SESSIONS_LIMIT) break
+      }
+      return sessions
+    }
+
+    /** Record a session (moving it to the front) and update the last-session hint. */
+    function rememberSession(sessionId, title, storage) {
+      if (typeof sessionId !== 'string' || sessionId === '') return
+      const resolved = storage === undefined ? storageRef() : storage
+      const entry = { id: sessionId, title: typeof title === 'string' ? title : '' }
+      const others = knownSessions(resolved).filter((candidate) => candidate.id !== sessionId)
+      storageSet(resolved, KNOWN_SESSIONS_KEY, JSON.stringify([entry, ...others].slice(0, KNOWN_SESSIONS_LIMIT)))
+      storageSet(resolved, SESSION_HINT_KEY, sessionId)
+    }
+
+    /**
+     * Pure view-model for the project/session bar. `fallback` marks a state the
+     * Host resolved implicitly (no live session, or the newest live root
+     * session rather than an explicit binding by this page).
+     * @param {any} state the `state` RPC value
+     */
+    function projectSessionView(state) {
+      if (state === null || state === undefined || typeof state !== 'object') return null
+      const project = state.project !== null && typeof state.project === 'object' ? state.project : {}
+      const session = state.session !== null && typeof state.session === 'object' ? state.session : {}
+      const sessionId = typeof session.id === 'string' && session.id !== '' ? session.id : ''
+      const cwd = typeof session.cwd === 'string' ? session.cwd : ''
+      const projectName = typeof project.name === 'string' && project.name !== '' ? project.name : '—'
+      const projectKey = typeof project.key === 'string' ? project.key : ''
+      const workspace = typeof project.workspace === 'string' && project.workspace !== '' ? project.workspace : cwd
+      return {
+        projectName,
+        projectKey,
+        workspace: workspace === '' ? '—' : workspace,
+        sessionId,
+        cwd,
+        live: session.live === true,
+        fallback: sessionId === '' || session.live !== true
+      }
+    }
+
+    /**
+     * Candidate rows for the selector: the Host-resolved session and the
+     * explicitly pinned one first, then locally recorded sessions.
+     * @param {{id: string, title: string}[]} known
+     * @param {string} pinnedId
+     * @param {string} resolvedId
+     */
+    function sessionChoices(known, pinnedId, resolvedId) {
+      const listed = Array.isArray(known) ? known : []
+      const ordered = []
+      for (const candidate of [resolvedId, pinnedId]) {
+        if (typeof candidate === 'string' && candidate !== '') ordered.push(candidate)
+      }
+      for (const entry of listed) ordered.push(entry.id)
+      const seen = new Set()
+      const choices = []
+      for (const id of ordered) {
+        if (typeof id !== 'string' || id === '' || seen.has(id)) continue
+        seen.add(id)
+        const match = listed.find((entry) => entry.id === id)
+        choices.push({ id, title: match !== undefined && typeof match.title === 'string' ? match.title : '' })
+      }
+      return choices
+    }
+
+    /** Shorten a session id for a compact label without hiding its prefix. */
+    function shortSessionId(sessionId) {
+      if (typeof sessionId !== 'string' || sessionId === '') return ''
+      return sessionId.length <= 16 ? sessionId : `${sessionId.slice(0, 8)}…${sessionId.slice(-4)}`
+    }
+
+    function sessionChoiceLabel(choice) {
+      const id = shortSessionId(choice.id)
+      const title = typeof choice.title === 'string' && choice.title !== '' ? choice.title : ''
+      return title === '' ? t('selector.optionNoTitle', { id }) : t('selector.optionWithTitle', { title, id })
+    }
+
+    /**
+     * Bind the workbench to a session explicitly (empty id -> Host default).
+     * The write to localStorage is only a hint; the Host still resolves the
+     * session and reports back what it actually used.
+     */
+    function bindSession(sessionId) {
+      const next = typeof sessionId === 'string' ? sessionId : ''
+      const storage = storageRef()
+      if (next === '') storageRemove(storage, SESSION_HINT_KEY)
+      else storageSet(storage, SESSION_HINT_KEY, next)
+      set({ sessionId: next, selectedBatchId: null, detailBatchId: '', detail: null, detailError: null })
+      void refreshState({ sessionId: next })
     }
 
     async function refreshState(options) {
@@ -281,7 +809,7 @@ window.__ModuleLoader__.load({
         const text = await fetchPromptText(explicit)
         const copied = await copyText(text)
         set({ copying: false })
-        showToast(copied ? '开场提示词已复制' : '无法自动复制：请手动选择文本')
+        showToast(copied ? t('toast.promptCopied') : t('toast.copyManual'))
       } catch (error) {
         set({ copying: false, promptError: error })
       }
@@ -308,12 +836,12 @@ window.__ModuleLoader__.load({
         if (!reused) text = await fetchPromptText(batchId)
         const actions = store.inputActions
         if (actions === null || actions === undefined || typeof actions.setDraft !== 'function') {
-          showToast('无法插入：请从输入框「交接」按钮打开面板')
+          showToast(t('toast.insertUnavailable'))
           return
         }
         actions.setDraft(text)
         closePanel()
-        showToast('已插入输入框')
+        showToast(t('toast.inserted'))
       } catch (error) {
         set({ promptError: error })
       }
@@ -461,9 +989,20 @@ window.__ModuleLoader__.load({
       )
     }
 
+    /** Localized remedy for a Host `HANDOFF_*` code; '' when the table has none. */
+    function localizedRemedy(code) {
+      if (typeof code !== 'string' || code === '') return ''
+      const key = `remedy.${code}`
+      return hasMessage(key) ? t(key) : ''
+    }
+
     function ErrorNotice({ error }) {
       const described = describeError(error)
       if (described.message === '') return null
+      // The Host sends a remedy with every failure; older/newer builds may omit
+      // one or carry a code this UI does not know, so prefer the localized table
+      // and fall back to whatever the Host supplied.
+      const remedy = localizedRemedy(described.code) || described.remedy
       return h(
         'div',
         {
@@ -479,9 +1018,9 @@ window.__ModuleLoader__.load({
             color: T.text
           }
         },
-        h('div', { style: { fontWeight: 600, color: T.error } }, described.code === '' ? '请求失败' : described.code),
+        h('div', { style: { fontWeight: 600, color: T.error } }, described.code === '' ? t('error.requestFailed') : described.code),
         h('div', null, described.message),
-        described.remedy === '' ? null : h('div', { style: { color: T.text2 } }, `修法：${described.remedy}`)
+        remedy === '' ? null : h('div', { style: { color: T.text2 } }, t('error.remedy', { text: remedy }))
       )
     }
 
@@ -640,8 +1179,8 @@ window.__ModuleLoader__.load({
         'button',
         {
           type: 'button',
-          title: '交接：生成 / 载入交接包',
-          'aria-label': '交接',
+          title: t('app.composerTitle'),
+          'aria-label': t('app.title'),
           'aria-expanded': active,
           onClick: () => {
             if (store.open) {
@@ -649,11 +1188,9 @@ window.__ModuleLoader__.load({
               return
             }
             if (typeof props.sessionId === 'string' && props.sessionId !== '') {
-              try {
-                window.localStorage.setItem(SESSION_HINT_KEY, props.sessionId)
-              } catch {
-                /* private mode / storage disabled: the Host fallback still works */
-              }
+              // P2-G1: record the session so the workbench selector can bind
+              // back to it without a Host-side session-listing method.
+              rememberSession(props.sessionId, typeof sessionTitle === 'string' ? sessionTitle : '')
             }
             set({
               sessionId: props.sessionId,
@@ -682,7 +1219,7 @@ window.__ModuleLoader__.load({
           }
         },
         h(HandoffGlyph, { size: 15 }),
-        h('span', { style: { whiteSpace: 'nowrap' } }, '交接')
+        h('span', { style: { whiteSpace: 'nowrap' } }, t('app.title'))
       )
     }
 
@@ -706,7 +1243,7 @@ window.__ModuleLoader__.load({
         h(
           'div',
           { style: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 } },
-          h('span', { style: { color: T.success, fontFamily: FONT, fontSize: 12.5, fontWeight: 600 } }, '已生成'),
+          h('span', { style: { color: T.success, fontFamily: FONT, fontSize: 12.5, fontWeight: 600 } }, t('create.created')),
           h('span', { style: { fontFamily: MONO, fontSize: 12 } }, result.batchId ?? ''),
           h('span', { style: { flex: '1 1 auto' } }),
           h(Badge, {
@@ -714,44 +1251,50 @@ window.__ModuleLoader__.load({
             color: T.brand
           })
         ),
-        h(KeyValue, { label: '目录', mono: true, children: result.displayDir ?? result.dir ?? '—' }),
+        h(KeyValue, { label: t('field.directory'), mono: true, children: result.displayDir ?? result.dir ?? '—' }),
         h(KeyValue, {
-          label: '证据',
-          children: `${Array.isArray(result.artifacts) ? result.artifacts.length : 0} 个文件${
-            result.totals?.artifactBytes !== undefined ? `，${formatBytes(result.totals.artifactBytes)}` : ''
-          }`
+          label: t('field.evidence'),
+          children:
+            result.totals?.artifactBytes === undefined
+              ? t('create.artifacts', { count: Array.isArray(result.artifacts) ? result.artifacts.length : 0 })
+              : t('create.artifactsWithBytes', {
+                  count: Array.isArray(result.artifacts) ? result.artifacts.length : 0,
+                  bytes: formatBytes(result.totals.artifactBytes)
+                })
         }),
         lineage === undefined || lineage === null
           ? null
           : h(KeyValue, {
-              label: '血缘',
+              label: t('field.lineage'),
               children:
-                `sequence ${lineage.sequence}` +
-                (lineage.previous === undefined ? '' : `，previous ${lineage.previous}`) +
-                (lineage.supersedes === undefined ? '' : `，supersedes ${lineage.supersedes}`)
+                t('create.lineageSequence', { sequence: lineage.sequence }) +
+                (lineage.previous === undefined ? '' : t('create.lineagePrevious', { batchId: lineage.previous })) +
+                (lineage.supersedes === undefined ? '' : t('create.lineageSupersedes', { batchId: lineage.supersedes }))
             }),
         warnings.length === 0
           ? null
           : h(
               'div',
               { style: { marginTop: 6, fontFamily: FONT, fontSize: 11.5, color: T.warn } },
-              `${warnings.length} 条警告：` +
-                warnings
+              t('create.warnings', {
+                count: warnings.length,
+                details: warnings
                   .slice(0, 4)
                   .map((warning) => `[${warning.code}] ${warning.detail}`)
-                  .join('；')
+                  .join(t('list.separator'))
+              })
             ),
         h(
           'div',
           { style: { display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' } },
-          h(Button, { primary: true, onClick: () => void performCopy(result.batchId), disabled: store.copying }, store.copying ? '正在生成提示词…' : '复制开场提示词'),
+          h(Button, { primary: true, onClick: () => void performCopy(result.batchId), disabled: store.copying }, store.copying ? t('common.buildingPrompt') : t('common.copyOpeningPrompt')),
           h(Button, {
             onClick: async () => {
               const ok = await copyText(String(result.displayDir ?? result.dir ?? ''))
-              showToast(ok ? '目录已复制' : '无法自动复制，请手动选择目录')
+              showToast(ok ? t('toast.directoryCopied') : t('toast.directoryCopyManual'))
             }
-          }, '复制目录'),
-          h(Button, { onClick: openWorkbench }, '打开工作台')
+          }, t('common.copyDirectory')),
+          h(Button, { onClick: openWorkbench }, t('common.openWorkbench'))
         )
       )
     }
@@ -766,16 +1309,16 @@ window.__ModuleLoader__.load({
         h(
           'div',
           { style: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5, flexWrap: 'wrap' } },
-          h('span', { style: { fontFamily: FONT, fontSize: 12, color: T.text } }, '新会话开场提示词'),
-          h(Badge, { text: `trust=${store.promptTrust}`, color: trustColor(store.promptTrust) }),
+          h('span', { style: { fontFamily: FONT, fontSize: 12, color: T.text } }, t('prompt.heading')),
+          h(Badge, { text: t('prompt.trustBadge', { trust: store.promptTrust }), color: trustColor(store.promptTrust) }),
           h('span', { style: { fontFamily: MONO, fontSize: 11, color: T.text2 } }, store.promptBatchId),
           h('span', { style: { flex: '1 1 auto' } }),
           h(Button, {
             onClick: async () => {
               const ok = await copyText(store.promptText)
-              showToast(ok ? '已复制' : '无法自动复制，请手动选择文本')
+              showToast(ok ? t('toast.copied') : t('toast.copyManual'))
             }
-          }, '再次复制')
+          }, t('common.copyAgain'))
         ),
         h('textarea', {
           readOnly: true,
@@ -806,10 +1349,10 @@ window.__ModuleLoader__.load({
         h(ErrorNotice, { error: store.stateError }),
         h(
           Field,
-          { label: '标题', hint: '可选，最多 200 字' },
+          { label: t('create.titleLabel'), hint: t('create.titleHint') },
           h(TextInput, {
             value: store.createTitle,
-            placeholder: '交接批次标题（用于 manifest / 列表）',
+            placeholder: t('create.titlePlaceholder'),
             maxLength: 200,
             disabled: busy,
             onChange: (value) => set({ createTitle: value })
@@ -817,10 +1360,10 @@ window.__ModuleLoader__.load({
         ),
         h(
           Field,
-          { label: '备注', hint: '可选，写进 HANDOFF 的 H1 叙述' },
+          { label: t('create.summaryLabel'), hint: t('create.summaryHint') },
           h(TextArea, {
             value: store.createSummary,
-            placeholder: '一句话说明这次交接的重点 / 未完成事项',
+            placeholder: t('create.summaryPlaceholder'),
             rows: 3,
             maxLength: 8000,
             onChange: (value) => set({ createSummary: value })
@@ -829,22 +1372,22 @@ window.__ModuleLoader__.load({
         h(
           'div',
           { style: { marginBottom: 10 } },
-          h('div', { style: { fontFamily: FONT, fontSize: 12, marginBottom: 4 } }, '目标'),
+          h('div', { style: { fontFamily: FONT, fontSize: 12, marginBottom: 4 } }, t('create.targetLabel')),
           h(
             'div',
             { style: { display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' } },
-            h(Choice, { active: target === 'user', onClick: () => set({ target: 'user' }) }, 'user（默认，$DSH_HOME）'),
-            h(Choice, { active: target === 'workspace', onClick: () => set({ target: 'workspace' }) }, 'workspace（降级）')
+            h(Choice, { active: target === 'user', onClick: () => set({ target: 'user' }) }, t('create.targetUser')),
+            h(Choice, { active: target === 'workspace', onClick: () => set({ target: 'workspace' }) }, t('create.targetWorkspace'))
           ),
           h(
             'div',
             { style: { marginTop: 6, fontFamily: MONO, fontSize: 11.5, color: T.text2, overflowWrap: 'anywhere' } },
-            targetRoot === null ? '目标根目录：读取中…' : `写入根目录：${targetRoot}`
+            targetRoot === null ? t('create.targetRootLoading') : t('create.writeRoot', { root: targetRoot })
           ),
           h(
             'div',
             { style: { marginTop: 2, fontFamily: FONT, fontSize: 11, color: T.text2 } },
-            '实际批次目录 = 根目录 / 项目 key / batchId，由宿主计算并在生成后显示；点击前不会写盘。'
+            t('create.dirNote')
           )
         ),
         h(
@@ -853,21 +1396,21 @@ window.__ModuleLoader__.load({
           h(
             Checkbox,
             { checked: store.createIncludeDiffs === true, onChange: (value) => set({ createIncludeDiffs: value }) },
-            '附带会话改动 diff（≤20 文件 / ≤512 KiB）'
+            t('create.includeDiffs')
           )
         ),
         store.createError === null ? null : h(ErrorNotice, { error: store.createError }),
         h(
           'div',
           { style: { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' } },
-          h(Button, { primary: true, disabled: manageDisabled, onClick: () => void performCreate({ copy: false }) }, busy ? '正在生成…' : '生成交接包'),
-          h(Button, { disabled: manageDisabled, onClick: () => void performCreate({ copy: true }) }, '生成并复制开场提示词')
+          h(Button, { primary: true, disabled: manageDisabled, onClick: () => void performCreate({ copy: false }) }, busy ? t('create.busy') : t('create.submit')),
+          h(Button, { disabled: manageDisabled, onClick: () => void performCreate({ copy: true }) }, t('create.submitAndCopy'))
         ),
         busy
           ? h(
               'div',
               { style: { marginTop: 8, fontFamily: FONT, fontSize: 11.5, color: T.text2 } },
-              '正在采集证据并写入交接包，可能需要几秒…（写操作已由这次点击确认）'
+              t('create.busyNote')
             )
           : null,
         h(ErrorNotice, { error: store.promptError }),
@@ -885,14 +1428,14 @@ window.__ModuleLoader__.load({
         return h(
           'div',
           { style: { color: T.text2, fontFamily: FONT, fontSize: 12, padding: '14px 0' } },
-          '正在校验：读包 + 重算哈希与漂移…'
+          t('detail.loading')
         )
       }
       if (detail === null || detail === undefined) {
         return h(
           'div',
           { style: { color: T.text2, fontFamily: FONT, fontSize: 12, padding: '14px 0', lineHeight: 1.8 } },
-          '从左侧选择一个批次，查看 trust / drift / findings，并复制开场提示词。'
+          t('detail.empty')
         )
       }
       const verification = detail.verification
@@ -915,11 +1458,11 @@ window.__ModuleLoader__.load({
           'div',
           { style: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 6 } },
           h('span', { style: { fontFamily: MONO, fontSize: 12.5, fontWeight: 600 } }, detail.batchId ?? ''),
-          h(Badge, { text: `trust=${trust}`, color: trustColor(trust) }),
+          h(Badge, { text: t('prompt.trustBadge', { trust }), color: trustColor(trust) }),
           counts === undefined
             ? null
             : h(Badge, {
-                text: `${counts.errors} error / ${counts.warnings} warn`,
+                text: t('detail.counts', { errors: counts.errors, warnings: counts.warnings }),
                 color: counts.errors > 0 ? T.error : counts.warnings > 0 ? T.warn : T.success
               }),
           h('span', { style: { flex: '1 1 auto' } }),
@@ -929,7 +1472,7 @@ window.__ModuleLoader__.load({
               type: 'button',
               onClick: async () => {
                 const ok = await copyText(String(detail.displayDir ?? detail.dir ?? ''))
-                showToast(ok ? '目录已复制' : '无法自动复制，请手动选择目录')
+                showToast(ok ? t('toast.directoryCopied') : t('toast.directoryCopyManual'))
               },
               style: {
                 border: 'none',
@@ -941,16 +1484,16 @@ window.__ModuleLoader__.load({
                 padding: 0
               }
             },
-            '复制目录'
+            t('common.copyDirectory')
           )
         ),
-        h(KeyValue, { label: '目录', mono: true, children: detail.displayDir ?? detail.dir ?? '—' }),
+        h(KeyValue, { label: t('field.directory'), mono: true, children: detail.displayDir ?? detail.dir ?? '—' }),
         detail.manifest?.title === null || detail.manifest?.title === undefined
           ? null
-          : h(KeyValue, { label: '标题', children: detail.manifest.title }),
+          : h(KeyValue, { label: t('field.title'), children: detail.manifest.title }),
         verification?.checkedAt === undefined
           ? null
-          : h(KeyValue, { label: '校验于', children: formatTime(verification.checkedAt) }),
+          : h(KeyValue, { label: t('field.verifiedAt'), children: formatTime(verification.checkedAt) }),
         h(
           'div',
           {
@@ -962,17 +1505,21 @@ window.__ModuleLoader__.load({
             }
           },
           drift === undefined || drift === null
-            ? '漂移：未执行漂移检查'
+            ? t('detail.driftNotChecked')
             : drifted
-              ? `漂移：gitHead ${drift.gitHeadChanged === true ? '已变' : '未变'} · 源文件变化 ${drift.sourceFilesChanged} · 缺失 ${drift.sourceFilesMissing}`
-              : '漂移：无（gitHead 未变，源文件哈希一致）'
+              ? t('detail.driftChanged', {
+                  head: drift.gitHeadChanged === true ? t('detail.driftHeadChanged') : t('detail.driftHeadUnchanged'),
+                  changed: drift.sourceFilesChanged,
+                  missing: drift.sourceFilesMissing
+                })
+              : t('detail.driftClean')
         ),
         findings.length === 0
           ? null
           : h(
               'div',
               { style: { marginTop: 8, border: `1px solid ${T.border1}`, borderRadius: 8, padding: '7px 10px' } },
-              h('div', { style: { fontFamily: FONT, fontSize: 11.5, fontWeight: 600, marginBottom: 3 } }, `findings（${findings.length}）`),
+              h('div', { style: { fontFamily: FONT, fontSize: 11.5, fontWeight: 600, marginBottom: 3 } }, t('detail.findingsTitle', { count: findings.length })),
               findings.slice(0, 12).map((finding, index) =>
                 h(
                   'div',
@@ -992,7 +1539,7 @@ window.__ModuleLoader__.load({
                 )
               ),
               findings.length > 12
-                ? h('div', { style: { fontFamily: FONT, fontSize: 11.5, color: T.text2 } }, `还有 ${findings.length - 12} 条…`)
+                ? h('div', { style: { fontFamily: FONT, fontSize: 11.5, color: T.text2 } }, t('detail.findingsMore', { count: findings.length - 12 }))
                 : null
             ),
         warnings.length === 0
@@ -1000,11 +1547,11 @@ window.__ModuleLoader__.load({
           : h(
               'div',
               { style: { marginTop: 8, fontFamily: FONT, fontSize: 11.5, color: T.warn, lineHeight: 1.6 } },
-              `包内警告（${warnings.length}）：` +
+              t('detail.warningsTitle', { count: warnings.length }) +
                 warnings
                   .slice(0, 5)
                   .map((warning) => `[${warning.code}] ${warning.detail}`)
-                  .join('；')
+                  .join(t('list.separator'))
             ),
         sections.length === 0
           ? null
@@ -1046,15 +1593,15 @@ window.__ModuleLoader__.load({
           : h(
               'div',
               { style: { marginTop: 8, fontFamily: FONT, fontSize: 11.5, color: T.text2, lineHeight: 1.7 } },
-              h('div', { style: { color: T.text, fontWeight: 600, marginBottom: 2 } }, '下一步'),
+              h('div', { style: { color: T.text, fontWeight: 600, marginBottom: 2 } }, t('detail.nextSteps')),
               next.slice(0, 3).map((item, index) => h('div', { key: `n-${index}` }, `· ${item}`))
             ),
         h(ErrorNotice, { error: store.promptError }),
         h(
           'div',
           { style: { display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' } },
-          h(Button, { primary: true, disabled: store.copying, onClick: () => void performCopy(detail.batchId) }, store.copying ? '正在生成提示词…' : '复制开场提示词'),
-          h(Button, { onClick: () => void insertPrompt(detail.batchId) }, '插入输入框'),
+          h(Button, { primary: true, disabled: store.copying, onClick: () => void performCopy(detail.batchId) }, store.copying ? t('common.buildingPrompt') : t('common.copyOpeningPrompt')),
+          h(Button, { onClick: () => void insertPrompt(detail.batchId) }, t('common.insertIntoComposer')),
           h(
             Button,
             {
@@ -1063,13 +1610,13 @@ window.__ModuleLoader__.load({
                 openWorkbench()
               }
             },
-            '打开工作台'
+            t('common.openWorkbench')
           )
         )
       )
     }
 
-    /** The batch list shared by the 「载入」 tab and the workbench page. */
+    /** The batch list shared by the Load tab and the workbench page. */
     function BatchList({ maxHeight }) {
       useStoreVersion()
       const state = store.state
@@ -1115,7 +1662,7 @@ window.__ModuleLoader__.load({
                   whiteSpace: 'nowrap'
                 }
               },
-              `${batch.title !== null && batch.title !== undefined ? batch.title : '（无标题）'} · ${formatTime(batch.createdAt)}`
+              `${batch.title !== null && batch.title !== undefined ? batch.title : t('batchlist.untitled')} · ${formatTime(batch.createdAt)}`
             )
           )
         )
@@ -1139,14 +1686,14 @@ window.__ModuleLoader__.load({
           { style: { padding: '16px 14px' } },
           store.stateError !== null
             ? h(ErrorNotice, { error: store.stateError })
-            : h('div', { style: { color: T.text2, fontFamily: FONT, fontSize: 12 } }, '正在读取批次…')
+            : h('div', { style: { color: T.text2, fontFamily: FONT, fontSize: 12 } }, t('load.loadingBatches'))
         )
       }
       if (batches.length === 0) {
         return h(
           'div',
           { style: { padding: '16px 14px', color: T.text2, fontFamily: FONT, fontSize: 12, lineHeight: 1.8 } },
-          '还没有批次。先切到「生成」创建第一包交接。'
+          t('load.empty')
         )
       }
       return h(
@@ -1189,12 +1736,12 @@ window.__ModuleLoader__.load({
         },
         h('span', { style: { color: T.brand, display: 'inline-flex' } }, h(HandoffGlyph, { size: 18 })),
         h('div', { style: { flex: '1 1 auto' } },
-          h('div', { style: { fontFamily: FONT, fontSize: 13.5, fontWeight: 600 } }, '继续交接'),
-          h('div', { style: { fontFamily: FONT, fontSize: 11.5, color: T.text2 } }, '写入新批次；旧批次不被修改')
+          h('div', { style: { fontFamily: FONT, fontSize: 13.5, fontWeight: 600 } }, t('continue.title')),
+          h('div', { style: { fontFamily: FONT, fontSize: 11.5, color: T.text2 } }, t('continue.subtitle'))
         ),
         h('button', {
           type: 'button',
-          'aria-label': '关闭',
+          'aria-label': t('common.close'),
           onClick: closeContinue,
           style: { border: 'none', background: 'transparent', color: T.text2, cursor: 'pointer', fontSize: 16, lineHeight: '1', padding: 4 }
         }, '×')
@@ -1205,29 +1752,27 @@ window.__ModuleLoader__.load({
         h(
           'div',
           { style: { display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' } },
-          h(Choice, { active: mode === 'append', onClick: () => set({ continueMode: 'append', continueConfirm: false }) }, 'append（承接最新）'),
-          h(Choice, { active: mode === 'update', onClick: () => set({ continueMode: 'update', continueConfirm: false }) }, 'update（标记 supersedes）')
+          h(Choice, { active: mode === 'append', onClick: () => set({ continueMode: 'append', continueConfirm: false }) }, t('continue.appendChoice')),
+          h(Choice, { active: mode === 'update', onClick: () => set({ continueMode: 'update', continueConfirm: false }) }, t('continue.updateChoice'))
         ),
         h(
           'div',
           { style: { fontFamily: FONT, fontSize: 11.5, color: T.text2, lineHeight: 1.7, marginBottom: 8 } },
-          mode === 'update'
-            ? '新建一代并记录 supersedes 最新批次；旧批次保持原样，不会被改写。需要二次确认。'
-            : '承接最新批次追加一代（lineage.previous）；旧批次保持原样。'
+          mode === 'update' ? t('continue.updateNote') : t('continue.appendNote')
         ),
-        h(KeyValue, { label: '基准批次', mono: true, children: baseId === '' ? '（无可用批次）' : baseId }),
-        h(KeyValue, { label: '写入根目录', mono: true, children: targetRoot ?? '—' }),
+        h(KeyValue, { label: t('continue.baseBatch'), mono: true, children: baseId === '' ? t('continue.noBatch') : baseId }),
+        h(KeyValue, { label: t('continue.writeRoot'), mono: true, children: targetRoot ?? '—' }),
         h(
           'div',
           { style: { fontFamily: FONT, fontSize: 11, color: T.text2, marginBottom: 10 } },
-          '实际批次目录由宿主按项目 key 生成，写入完成后显示；点击前不会写盘。'
+          t('continue.dirNote')
         ),
         h(
           Field,
-          { label: '标题', hint: '可选' },
+          { label: t('continue.titleLabel'), hint: t('continue.titleHint') },
           h(TextInput, {
             value: store.continueTitle,
-            placeholder: '这一代的标题（可选）',
+            placeholder: t('continue.titlePlaceholder'),
             maxLength: 200,
             disabled: busy,
             onChange: (value) => set({ continueTitle: value })
@@ -1235,7 +1780,7 @@ window.__ModuleLoader__.load({
         ),
         h(
           Field,
-          { label: '备注', hint: '可选，写进 H1' },
+          { label: t('continue.summaryLabel'), hint: t('continue.summaryHint') },
           h(TextArea, {
             value: store.continueSummary,
             rows: 2,
@@ -1249,7 +1794,7 @@ window.__ModuleLoader__.load({
           h(
             Checkbox,
             { checked: store.continueIncludeDiffs === true, onChange: (value) => set({ continueIncludeDiffs: value }) },
-            '附带会话改动 diff'
+            t('continue.includeDiffs')
           )
         ),
         h(ErrorNotice, { error: store.continueError }),
@@ -1269,16 +1814,16 @@ window.__ModuleLoader__.load({
               h(
                 'div',
                 { style: { display: 'flex', gap: 8, alignItems: 'center', marginBottom: 4, flexWrap: 'wrap' } },
-                h('span', { style: { color: T.success, fontFamily: FONT, fontSize: 12.5, fontWeight: 600 } }, '已写入新批次'),
+                h('span', { style: { color: T.success, fontFamily: FONT, fontSize: 12.5, fontWeight: 600 } }, t('continue.written')),
                 h('span', { style: { fontFamily: MONO, fontSize: 12 } }, result.batchId ?? ''),
                 result.lineage === undefined || result.lineage === null
                   ? null
                   : h(Badge, {
-                      text: `第 ${result.lineage.sequence} 代`,
+                      text: t('continue.generation', { sequence: result.lineage.sequence }),
                       color: T.brand
                     })
               ),
-              h(KeyValue, { label: '目录', mono: true, children: result.displayDir ?? result.dir ?? '—' }),
+              h(KeyValue, { label: t('field.directory'), mono: true, children: result.displayDir ?? result.dir ?? '—' }),
               h(
                 'div',
                 { style: { display: 'flex', gap: 8, marginTop: 8 } },
@@ -1288,8 +1833,8 @@ window.__ModuleLoader__.load({
                     void performDetail(result.batchId)
                     closeContinue()
                   }
-                }, '查看该批次'),
-                h(Button, { onClick: closeContinue }, '关闭')
+                }, t('continue.viewBatch')),
+                h(Button, { onClick: closeContinue }, t('common.close'))
               )
             ),
         needsUpdateConfirm
@@ -1306,7 +1851,7 @@ window.__ModuleLoader__.load({
                   marginTop: 6
                 }
               },
-              '二次确认：将新建一个 supersedes 批次，旧批次只读保留。'
+              t('continue.confirmNote')
             )
           : null,
         result === null
@@ -1314,9 +1859,9 @@ window.__ModuleLoader__.load({
               'div',
               { style: { display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' } },
               needsUpdateConfirm
-                ? h(Button, { onClick: () => set({ continueConfirm: true }) }, '继续交接（update）')
-                : h(Button, { primary: true, disabled: busy || latest === null, onClick: () => void performContinue() }, busy ? '正在写入…' : `确认写入（${mode}）`),
-              h(Button, { onClick: closeContinue }, '取消')
+                ? h(Button, { onClick: () => set({ continueConfirm: true }) }, t('continue.confirmUpdate'))
+                : h(Button, { primary: true, disabled: busy || latest === null, onClick: () => void performContinue() }, busy ? t('continue.writing') : t('continue.confirmWrite', { mode })),
+              h(Button, { onClick: closeContinue }, t('common.cancel'))
             )
           : null
       )
@@ -1341,7 +1886,7 @@ window.__ModuleLoader__.load({
           {
             role: 'dialog',
             'aria-modal': 'true',
-            'aria-label': '继续交接',
+            'aria-label': t('continue.title'),
             style: {
               width: 'min(560px, calc(100vw - 40px))',
               maxHeight: 'min(84vh, 720px)',
@@ -1389,8 +1934,8 @@ window.__ModuleLoader__.load({
       return h(
         'div',
         { style: { display: 'flex', gap: 2, padding: '0 10px', borderBottom: `1px solid ${T.border1}`, background: T.layer1 } },
-        item('create', '生成'),
-        item('load', '载入')
+        item('create', t('tab.create')),
+        item('load', t('tab.load'))
       )
     }
 
@@ -1413,8 +1958,8 @@ window.__ModuleLoader__.load({
             overflowWrap: 'anywhere'
           }
         },
-        h('span', null, state === null ? '读取中…' : `项目 ${state.project?.name ?? '—'}`),
-        h('span', null, batches === null ? '' : `· ${batches} 个批次`),
+        h('span', null, state === null ? t('panel.summaryLoading') : t('panel.project', { name: state.project?.name ?? '—' })),
+        h('span', null, batches === null ? '' : t('panel.batches', { count: batches })),
         h('span', { style: { flex: '1 1 auto' } }),
         h(
           'button',
@@ -1432,7 +1977,7 @@ window.__ModuleLoader__.load({
               padding: 0
             }
           },
-          store.loading ? '刷新中…' : '刷新'
+          store.loading ? t('common.refreshing') : t('common.refresh')
         )
       )
     }
@@ -1464,14 +2009,14 @@ window.__ModuleLoader__.load({
         h(
           'div',
           { style: { flex: '1 1 auto', minWidth: 0 } },
-          h('div', { style: { fontFamily: FONT, fontSize: 13.5, fontWeight: 600 } }, '交接'),
-          h('div', { style: { fontFamily: FONT, fontSize: 11.5, color: T.text2 } }, '生成 / 载入会话交接包')
+          h('div', { style: { fontFamily: FONT, fontSize: 13.5, fontWeight: 600 } }, t('app.title')),
+          h('div', { style: { fontFamily: FONT, fontSize: 11.5, color: T.text2 } }, t('app.subtitle'))
         ),
         h(
           'button',
           {
             type: 'button',
-            'aria-label': '关闭',
+            'aria-label': t('common.close'),
             onClick: closePanel,
             style: { border: 'none', background: 'transparent', color: T.text2, cursor: 'pointer', fontSize: 16, lineHeight: '1', padding: 4 }
           },
@@ -1490,9 +2035,9 @@ window.__ModuleLoader__.load({
             background: T.layer1
           }
         },
-        h(Button, { onClick: openWorkbench }, '打开工作台'),
+        h(Button, { onClick: openWorkbench }, t('common.openWorkbench')),
         h('span', { style: { flex: '1 1 auto' } }),
-        h(Button, { onClick: closePanel }, '关闭')
+        h(Button, { onClick: closePanel }, t('common.close'))
       )
       return h(
         'div',
@@ -1516,7 +2061,7 @@ window.__ModuleLoader__.load({
           {
             role: 'dialog',
             'aria-modal': 'true',
-            'aria-label': '交接',
+            'aria-label': t('app.title'),
             style: {
               width: 'min(680px, calc(100vw - 48px))',
               maxHeight: 'min(84vh, 780px)',
@@ -1549,22 +2094,140 @@ window.__ModuleLoader__.load({
       return h(HandoffGlyph, { size: typeof props?.size === 'number' ? props.size : 16 })
     }
 
+    // ------------------------------------------- project/session bar (P2-G1)
+    /**
+     * Explicit project/session selector for the workbench.
+     *
+     * The workbench is a root-scoped page: with no binding of its own the Host
+     * resolves the newest live root session, which made "which project am I
+     * reading/writing?" ambiguous (P2-G1). This bar shows what the Host
+     * actually resolved and lets the user pin a session explicitly — the
+     * project is the session's workspace. Candidate rows are client-local by
+     * design: the Host exposes no session/project listing method, and the UI
+     * does not invent one; the selection reuses the existing `sessionId` RPC
+     * parameter.
+     */
+    function ProjectSessionBar({ state }) {
+      useStoreVersion()
+      const pinned = typeof store.sessionId === 'string' ? store.sessionId : ''
+      const view = projectSessionView(state)
+      const choices = sessionChoices(knownSessions(), pinned, view !== null ? view.sessionId : '')
+      const cwd = view === null || view.cwd === '' ? '—' : view.cwd
+      const notice =
+        view === null
+          ? null
+          : pinned !== '' && view.sessionId !== '' && view.sessionId !== pinned
+            ? t('selector.noticeStale', { pinned: shortSessionId(pinned), resolved: shortSessionId(view.sessionId) })
+            : view.fallback
+              ? t('selector.noticeFallback', { cwd })
+              : pinned === '' && store.loading !== true
+                ? t('selector.noticeImplicit', { id: shortSessionId(view.sessionId), cwd })
+                : null
+      return h(
+        'div',
+        {
+          'data-testid': 'handoff-project-session',
+          style: {
+            margin: '8px 0 12px',
+            padding: '9px 12px',
+            border: `1px solid ${T.border1}`,
+            borderRadius: 10,
+            background: T.layer1,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 5,
+            fontFamily: FONT,
+            fontSize: 11.5,
+            color: T.text2
+          }
+        },
+        h(
+          'div',
+          { style: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' } },
+          h('span', { style: { fontWeight: 600, color: T.text } }, t('selector.title')),
+          h(
+            'select',
+            {
+              'data-testid': 'handoff-session-select',
+              value: pinned,
+              disabled: store.loading,
+              onChange: (event) => bindSession(event.target.value),
+              style: {
+                height: 27,
+                maxWidth: 360,
+                padding: '0 7px',
+                borderRadius: 7,
+                border: `1px solid ${T.border1}`,
+                background: T.base,
+                color: T.text,
+                fontFamily: FONT,
+                fontSize: 12,
+                outline: 'none'
+              }
+            },
+            h('option', { value: '' }, t('selector.hostDefault')),
+            choices.map((choice) => h('option', { key: choice.id, value: choice.id }, sessionChoiceLabel(choice)))
+          ),
+          h('span', { style: { flex: '1 1 auto' } }),
+          view === null
+            ? null
+            : h(Badge, {
+                text: view.fallback ? t('selector.fallbackBadge') : t('selector.live'),
+                color: view.fallback ? T.warn : T.success
+              })
+        ),
+        h('span', null, t('selector.hint')),
+        view === null
+          ? h('span', null, store.stateError === null ? t('panel.summaryLoading') : '')
+          : h(
+              'div',
+              { style: { display: 'flex', gap: 14, flexWrap: 'wrap' } },
+              h(
+                'span',
+                null,
+                t('selector.value', {
+                  label: t('selector.project'),
+                  value: view.projectKey === '' ? view.projectName : `${view.projectName} (${view.projectKey})`
+                })
+              ),
+              h('span', null, t('selector.value', { label: t('selector.workspace'), value: view.workspace })),
+              h(
+                'span',
+                null,
+                t('selector.value', {
+                  label: t('selector.session'),
+                  value: view.sessionId === '' ? t('workbench.sessionUnbound') : shortSessionId(view.sessionId)
+                })
+              )
+            ),
+        notice === null ? null : h('span', { style: { color: T.warn, lineHeight: 1.6 } }, notice),
+        view === null || choices.length > 0 ? null : h('span', null, t('selector.knownEmpty'))
+      )
+    }
+
     // ---------------------------------------------------------- workbench page
-    function WorkbenchPage() {
+    function WorkbenchPage(props) {
       useStoreVersion()
       const state = store.state
       const batches = state !== null && Array.isArray(state.batches) ? state.batches : []
       React.useEffect(() => {
-        let sessionId = store.sessionId
-        if (typeof sessionId !== 'string' || sessionId === '') {
-          try {
-            const stored = window.localStorage.getItem(SESSION_HINT_KEY)
-            if (typeof stored === 'string' && stored !== '') sessionId = stored
-          } catch {
-            /* storage unavailable: the Host fallback still works */
-          }
+        // P2-G1 binding priority: this tab's explicit pin, then the slot's
+        // current session, then the hint recorded by the composer button.
+        // Nothing is invented: an empty id simply asks the Host to resolve.
+        let sessionId = typeof store.sessionId === 'string' ? store.sessionId : ''
+        const slotSessionId =
+          props !== null && props !== undefined && typeof props.sessionId === 'string' ? props.sessionId : ''
+        const slotTitle =
+          props !== null && props !== undefined && typeof props.sessionTitle === 'string' ? props.sessionTitle : ''
+        if (sessionId === '') sessionId = slotSessionId
+        if (sessionId === '') {
+          const stored = storageGet(storageRef(), SESSION_HINT_KEY)
+          if (typeof stored === 'string') sessionId = stored
         }
-        if (typeof sessionId === 'string' && sessionId !== '') set({ sessionId })
+        if (sessionId !== '') {
+          if (store.sessionId !== sessionId) set({ sessionId })
+          rememberSession(sessionId, slotTitle !== '' ? slotTitle : store.sessionTitle)
+        }
         if (store.state === null && !store.loading) void refreshState({ sessionId })
         // eslint-disable-next-line react-hooks/exhaustive-deps
       }, [])
@@ -1603,37 +2266,30 @@ window.__ModuleLoader__.load({
             'div',
             { style: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' } },
             h('span', { style: { color: T.brand, display: 'inline-flex' } }, h(HandoffGlyph, { size: 22 })),
-            h('h1', { style: { margin: 0, fontSize: 18, fontWeight: 650 } }, '交接工作台'),
+            h('h1', { style: { margin: 0, fontSize: 18, fontWeight: 650 } }, t('app.workbenchTitle')),
             h('span', { style: { flex: '1 1 auto' } }),
-            h(Button, { onClick: refreshAll, disabled: store.loading }, store.loading ? '刷新中…' : '刷新'),
+            h(Button, { onClick: refreshAll, disabled: store.loading }, store.loading ? t('common.refreshing') : t('common.refresh')),
             h(Button, {
               onClick: () => {
                 if (store.detailBatchId !== '') void performDetail(store.detailBatchId)
               },
               disabled: store.detailLoading || store.detailBatchId === ''
-            }, store.detailLoading ? '校验中…' : '校验'),
+            }, store.detailLoading ? t('common.verifying') : t('common.verify')),
             h(Button, {
               primary: true,
               onClick: () => {
                 set({ tab: 'create' })
                 openPanel()
               }
-            }, '生成'),
-            h(Button, { onClick: () => openContinue('append') }, '继续交接'),
-            h(Button, { onClick: () => selectMainPanel('conversation') }, '返回对话')
+            }, t('tab.create')),
+            h(Button, { onClick: () => openContinue('append') }, t('continue.title')),
+            h(Button, { onClick: () => selectMainPanel('conversation') }, t('workbench.backToConversation'))
           ),
+          h(ProjectSessionBar, { state }),
           h(
-            'div',
-            { style: { display: 'flex', alignItems: 'center', gap: 12, margin: '2px 0 14px', flexWrap: 'wrap' } },
-            h(
-              'p',
-              { style: { margin: 0, color: T.text2, fontSize: 12.5, lineHeight: 1.7 } },
-              '交接包是“新会话开场提示词”的后端证据；写操作（生成 / 继续交接）会先显示目标目录并在点击后执行。'
-            ),
-            state === null
-              ? null
-              : h('span', { style: { fontFamily: FONT, fontSize: 11.5, color: T.text2 } },
-                  `项目 ${state.project?.name ?? '—'} · ${batches.length} 个批次 · 会话 ${state.session?.id ?? '未绑定'}`)
+            'p',
+            { style: { margin: '2px 0 14px', color: T.text2, fontSize: 12.5, lineHeight: 1.7 } },
+            t('workbench.description')
           ),
           h(
             'div',
@@ -1648,10 +2304,10 @@ window.__ModuleLoader__.load({
                 minHeight: 360
               }
             },
-            h(BatchList, { maxHeight: 'calc(100vh - 260px)' }),
+            h(BatchList, { maxHeight: 'calc(100vh - 300px)' }),
             h(
               'div',
-              { style: { padding: '12px 18px 18px', overflowY: 'auto', maxHeight: 'calc(100vh - 260px)' } },
+              { style: { padding: '12px 18px 18px', overflowY: 'auto', maxHeight: 'calc(100vh - 300px)' } },
               h(DetailView, { detail: store.detail, loading: store.detailLoading, error: store.detailError })
             )
           ),
@@ -1675,7 +2331,7 @@ window.__ModuleLoader__.load({
           // Conversation entry: a compact control at the left of the tool row.
           slots.inject('conversation.input.left', () =>
             slots.register(
-              { name: 'conversation.input.left', id: BUTTON_ID, order: BUTTON_ORDER, label: () => '交接' },
+              { name: 'conversation.input.left', id: BUTTON_ID, order: BUTTON_ORDER, label: () => t('app.title') },
               ComposerButton
             )
           ),
@@ -1685,7 +2341,7 @@ window.__ModuleLoader__.load({
           ),
           // Sidebar row + center page share one key.
           slots.inject('sidebar.panellist', () =>
-            slots.register({ name: 'sidebar.panellist', id: PANEL_ID, order: 50, label: () => '交接' }, SidebarIcon)
+            slots.register({ name: 'sidebar.panellist', id: PANEL_ID, order: 50, label: () => t('app.title') }, SidebarIcon)
           ),
           slots.inject('main', () => slots.register({ name: 'main', key: PANEL_ID }, WorkbenchPage))
         ]
@@ -1699,6 +2355,26 @@ window.__ModuleLoader__.load({
             }
           }
         }
+      },
+      /**
+       * Internal surface for the browser-less unit tests (no production code
+       * reads it): pure i18n/session helpers plus the shared store, so the
+       * language switch and the P2-G1 selector can be tested without React.
+       */
+      _test: {
+        messages: MESSAGES,
+        locale: () => currentLocale,
+        detectLocale,
+        formatMessage,
+        t,
+        projectSessionView,
+        sessionChoices,
+        sessionChoiceLabel,
+        knownSessions,
+        rememberSession,
+        shortSessionId,
+        bindSession,
+        store
       }
     }
   }
