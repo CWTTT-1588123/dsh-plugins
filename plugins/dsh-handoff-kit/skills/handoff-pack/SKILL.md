@@ -3,7 +3,7 @@ name: handoff-pack
 description: 生成、校验或消费当前工作区的确定性会话交接包（HANDOFF.md + manifest.json）。
 ---
 
-<!-- docs-meta: status=current; phase=P2; verified=c5fe455@2026-10-22; tracks=plugins/dsh-handoff-kit/src; supersedes=-; superseded-by=- -->
+<!-- docs-meta: status=current; phase=P2; verified=e3e6cba@2026-10-23; tracks=plugins/dsh-handoff-kit/src; supersedes=-; superseded-by=- -->
 
 # handoff-pack：会话交接包
 
@@ -29,6 +29,10 @@ description: 生成、校验或消费当前工作区的确定性会话交接包�
    - `handoff_pack action=append previousBatchId=<上一批>` → 新建批次并记录血缘（默认最新批次）；
    - `handoff_pack action=update supersedes=<被替代批>` → 新建批次声明替代（默认最新批次）；
    - 两者都**不原地修改历史批次**；`verify` 会检查血缘（`LINEAGE_BROKEN`）与"已被替代"（`SUPERSEDED_BATCH`）。
+5. **旧批次格式升级**（P3/M2）：`handoff_pack action=migrate batchId=<schemaVersion 1 批次>`
+   → 先校验源（有 error 即拒），只读源、写**新** schemaVersion 2 批次；`evidence/migration.json`
+   记录 provenance（源批次 id/`SHA256SUMS` 摘要/时间/工具）；源批次字节不变，不建血缘
+   （要续接工作仍用 append）。已是 v2 的批次会返回 `HANDOFF_MIGRATION_UNSUPPORTED_VERSION`。
 
 生成时自动附带两类只读燃料（缺失时降级为 `available:false` + warning，不阻塞）：
 - `changes`：宿主 `workspaceChanges` 的**已完成 turn**改动（H1「本会话改动」、H4 `[改动]`）；
