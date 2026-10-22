@@ -29,6 +29,8 @@ import {
   MANIFEST_FILE,
   SCHEMA_ID,
   SCHEMA_VERSION,
+  SCHEMA_VERSION_V2,
+  SUPPORTED_SCHEMA_VERSIONS,
   TARGETS,
   generatorIdentity,
   handoffError,
@@ -55,7 +57,10 @@ const MANIFEST_KEYS = Object.freeze([
   'redactions',
   'warnings',
   'limits',
-  'scan'
+  'scan',
+  'changes',
+  'fuel',
+  'lineage'
 ])
 
 /** Key order of the generator identity block. */
@@ -143,6 +148,37 @@ const SCAN_KEYS = Object.freeze([
 ])
 /** Key order of one `scan.tree` entry. */
 const TREE_ENTRY_KEYS = Object.freeze(['name', 'type', 'bytes'])
+/** Key order of the P1 changes block. */
+const CHANGES_KEYS = Object.freeze([
+  'available',
+  'source',
+  'turn',
+  'totals',
+  'files',
+  'diffs',
+  'collectedAt',
+  'note'
+])
+const CHANGE_TOTALS_KEYS = Object.freeze(['files', 'added', 'deleted', 'binary', 'oversized'])
+const CHANGE_FILE_KEYS = Object.freeze(['path', 'added', 'deleted', 'binary', 'oversized'])
+const CHANGE_DIFF_KEYS = Object.freeze(['path', 'kind', 'hunks', 'truncated'])
+const HUNK_KEYS = Object.freeze(['oldStart', 'oldLines', 'newStart', 'newLines', 'lines'])
+/** Key order of the P1 fuel block. */
+const FUEL_KEYS = Object.freeze(['goals', 'jobs'])
+const GOAL_FUEL_KEYS = Object.freeze(['available', 'goal', 'note'])
+const GOAL_KEYS = Object.freeze([
+  'id',
+  'objective',
+  'phase',
+  'roundsStarted',
+  'maxGoalRounds',
+  'activation',
+  'updatedAt'
+])
+const JOBS_FUEL_KEYS = Object.freeze(['available', 'count', 'statusCounts', 'items', 'note'])
+const JOB_KEYS = Object.freeze(['id', 'kind', 'label', 'status', 'startedAt', 'finishedAt', 'progress'])
+/** Key order of the P1 lineage block. */
+const LINEAGE_KEYS = Object.freeze(['sequence', 'previous', 'root', 'supersedes'])
 
 /** Evidence file roles, in the fixed display order used by HANDOFF H3. */
 const FILE_ROLES = Object.freeze(['entry', 'config', 'test', 'doc', 'source', 'other'])
@@ -353,6 +389,71 @@ function canonicalScanValue(value) {
   return out
 }
 
+function comparePaths(left, right) {
+  const leftPath = isPlainObject(left) && typeof left.path === 'string' ? left.path : ''
+  const rightPath = isPlainObject(right) && typeof right.path === 'string' ? right.path : ''
+  return compareStrings(leftPath, rightPath)
+}
+
+function canonicalDiffsValue(value) {
+  if (!Array.isArray(value)) return value
+  return [...value]
+    .map((entry) => {
+      if (!isPlainObject(entry)) return entry
+      const out = orderedObject(entry, CHANGE_DIFF_KEYS)
+      if (Array.isArray(out.hunks)) {
+        out.hunks = out.hunks.map((hunk) =>
+          isPlainObject(hunk) ? orderedObject(hunk, HUNK_KEYS) : hunk
+        )
+      }
+      return out
+    })
+    .sort(comparePaths)
+}
+
+function canonicalChangesValue(value) {
+  if (!isPlainObject(value)) return value
+  const out = orderedObject(value, CHANGES_KEYS)
+  if (isPlainObject(out.totals)) out.totals = orderedObject(out.totals, CHANGE_TOTALS_KEYS)
+  if (Array.isArray(out.files)) {
+    out.files = [...out.files]
+      .map((entry) => (isPlainObject(entry) ? orderedObject(entry, CHANGE_FILE_KEYS) : entry))
+      .sort(comparePaths)
+  }
+  if (Array.isArray(out.diffs)) out.diffs = canonicalDiffsValue(out.diffs)
+  return out
+}
+
+function canonicalFuelValue(value) {
+  if (!isPlainObject(value)) return value
+  const out = orderedObject(value, FUEL_KEYS)
+  if (isPlainObject(out.goals)) {
+    const goals = orderedObject(out.goals, GOAL_FUEL_KEYS)
+    if (isPlainObject(goals.goal)) goals.goal = orderedObject(goals.goal, GOAL_KEYS)
+    out.goals = goals
+  }
+  if (isPlainObject(out.jobs)) {
+    const jobs = orderedObject(out.jobs, JOBS_FUEL_KEYS)
+    if (isPlainObject(jobs.statusCounts)) {
+      const statusCounts = {}
+      for (const key of Object.keys(jobs.statusCounts).sort(compareStrings))
+        statusCounts[key] = jobs.statusCounts[key]
+      jobs.statusCounts = statusCounts
+    }
+    if (Array.isArray(jobs.items)) {
+      jobs.items = jobs.items.map((entry) =>
+        isPlainObject(entry) ? orderedObject(entry, JOB_KEYS) : entry
+      )
+    }
+    out.jobs = jobs
+  }
+  return out
+}
+
+function canonicalLineageValue(value) {
+  return isPlainObject(value) ? orderedObject(value, LINEAGE_KEYS) : value
+}
+
 /** Per-key canonicalizers used by serialization and parsing. */
 const VALUE_CANONICALIZERS = Object.freeze({
   generator: (value) => (isPlainObject(value) ? orderedObject(value, GENERATOR_KEYS) : value),
@@ -367,7 +468,10 @@ const VALUE_CANONICALIZERS = Object.freeze({
   redactions: canonicalRedactionsValue,
   warnings: canonicalWarningsValue,
   limits: canonicalLimitsValue,
-  scan: canonicalScanValue
+  scan: canonicalScanValue,
+  changes: canonicalChangesValue,
+  fuel: canonicalFuelValue,
+  lineage: canonicalLineageValue
 })
 
 /**
@@ -644,6 +748,144 @@ function normalizeScan(value) {
   return out
 }
 
+/** Normalize the P1 `changes` block (host workspaceChanges evidence). */
+function normalizeChanges(value) {
+  if (value === undefined || value === null) return undefined
+  if (!isPlainObject(value)) throw invalid('changes must be an object or null')
+  const out = { available: value.available === true }
+  if (typeof value.source === 'string') out.source = value.source
+  if (Number.isInteger(value.turn)) out.turn = value.turn
+  if (isPlainObject(value.totals)) {
+    out.totals = {
+      files: integerOr(value.totals.files, 0, 'changes.totals.files'),
+      added: integerOr(value.totals.added, 0, 'changes.totals.added'),
+      deleted: integerOr(value.totals.deleted, 0, 'changes.totals.deleted'),
+      binary: integerOr(value.totals.binary, 0, 'changes.totals.binary'),
+      oversized: integerOr(value.totals.oversized, 0, 'changes.totals.oversized')
+    }
+  }
+  if (Array.isArray(value.files)) {
+    out.files = value.files
+      .map((entry, index) => {
+        if (!isPlainObject(entry)) throw invalid(`changes.files[${index}] must be an object`)
+        const file = {
+          path: requireString(entry.path, `changes.files[${index}].path`),
+          added: integerOr(entry.added, 0, `changes.files[${index}].added`),
+          deleted: integerOr(entry.deleted, 0, `changes.files[${index}].deleted`)
+        }
+        if (entry.binary === true) file.binary = true
+        if (entry.oversized === true) file.oversized = true
+        return file
+      })
+      .sort(comparePaths)
+  }
+  if (Array.isArray(value.diffs)) {
+    out.diffs = value.diffs
+      .map((entry, index) => {
+        if (!isPlainObject(entry)) throw invalid(`changes.diffs[${index}] must be an object`)
+        const diff = {
+          path: requireString(entry.path, `changes.diffs[${index}].path`),
+          kind: requireString(entry.kind, `changes.diffs[${index}].kind`)
+        }
+        if (Array.isArray(entry.hunks)) {
+          diff.hunks = entry.hunks.map((hunk, hunkIndex) => {
+            if (!isPlainObject(hunk)) throw invalid(`changes.diffs[${index}].hunks[${hunkIndex}] must be an object`)
+            return {
+              oldStart: integerOr(hunk.oldStart, 0, `changes.diffs[${index}].hunks[${hunkIndex}].oldStart`),
+              oldLines: integerOr(hunk.oldLines, 0, `changes.diffs[${index}].hunks[${hunkIndex}].oldLines`),
+              newStart: integerOr(hunk.newStart, 0, `changes.diffs[${index}].hunks[${hunkIndex}].newStart`),
+              newLines: integerOr(hunk.newLines, 0, `changes.diffs[${index}].hunks[${hunkIndex}].newLines`),
+              lines: Array.isArray(hunk.lines) ? hunk.lines.map((line) => String(line)) : []
+            }
+          })
+        }
+        if (entry.truncated === true) diff.truncated = true
+        return diff
+      })
+      .sort(comparePaths)
+  }
+  if (typeof value.collectedAt === 'string') out.collectedAt = value.collectedAt
+  if (typeof value.note === 'string') out.note = value.note
+  return out
+}
+
+/** Normalize the P1 `fuel` block (goal/jobs read-only evidence). */
+function normalizeFuel(value) {
+  if (value === undefined || value === null) return undefined
+  if (!isPlainObject(value)) throw invalid('fuel must be an object or null')
+  const out = {}
+  if (isPlainObject(value.goals)) {
+    const goals = { available: value.goals.available === true }
+    if (isPlainObject(value.goals.goal)) {
+      const goal = value.goals.goal
+      goals.goal = {
+        id: typeof goal.id === 'string' ? goal.id : '',
+        objective: typeof goal.objective === 'string' ? goal.objective : '',
+        phase: typeof goal.phase === 'string' ? goal.phase : '',
+        roundsStarted: integerOr(goal.roundsStarted, 0, 'fuel.goals.goal.roundsStarted'),
+        maxGoalRounds: integerOr(goal.maxGoalRounds, 0, 'fuel.goals.goal.maxGoalRounds'),
+        updatedAt: integerOr(goal.updatedAt, 0, 'fuel.goals.goal.updatedAt')
+      }
+      if (typeof goal.activation === 'string') goals.goal.activation = goal.activation
+    }
+    if (typeof value.goals.note === 'string') goals.note = value.goals.note
+    out.goals = goals
+  }
+  if (isPlainObject(value.jobs)) {
+    const jobs = {
+      available: value.jobs.available === true,
+      count: integerOr(value.jobs.count, 0, 'fuel.jobs.count'),
+      statusCounts: {},
+      items: []
+    }
+    if (isPlainObject(value.jobs.statusCounts)) {
+      for (const key of Object.keys(value.jobs.statusCounts).sort(compareStrings)) {
+        const count = value.jobs.statusCounts[key]
+        if (Number.isInteger(count) && count >= 0) jobs.statusCounts[key] = count
+      }
+    }
+    if (Array.isArray(value.jobs.items)) {
+      jobs.items = value.jobs.items
+        .map((entry) => {
+          if (!isPlainObject(entry)) return undefined
+          const item = {
+            id: typeof entry.id === 'string' ? entry.id : '',
+            kind: typeof entry.kind === 'string' ? entry.kind : '',
+            label: typeof entry.label === 'string' ? entry.label : '',
+            status: typeof entry.status === 'string' ? entry.status : '',
+            startedAt: integerOr(entry.startedAt, 0, 'fuel.jobs.items.startedAt')
+          }
+          if (Number.isInteger(entry.finishedAt)) item.finishedAt = entry.finishedAt
+          if (typeof entry.progress === 'string') item.progress = entry.progress
+          return item
+        })
+        .filter((entry) => entry !== undefined)
+    }
+    if (typeof value.jobs.note === 'string') jobs.note = value.jobs.note
+    out.jobs = jobs
+  }
+  return out
+}
+
+/** Normalize the P1 `lineage` block (append/update chain). */
+function normalizeLineage(value) {
+  if (value === undefined || value === null) return undefined
+  if (!isPlainObject(value)) throw invalid('lineage must be an object or null')
+  const sequence = integerOr(value.sequence, 0, 'lineage.sequence')
+  if (sequence < 2) throw invalid('lineage.sequence must be an integer >= 2')
+  const previous = requireString(value.previous, 'lineage.previous')
+  const root = requireString(value.root, 'lineage.root')
+  if (!BATCH_ID_RE.test(previous)) throw invalid('lineage.previous must be a batch id')
+  if (!BATCH_ID_RE.test(root)) throw invalid('lineage.root must be a batch id')
+  const out = { sequence, previous, root }
+  if (value.supersedes !== undefined && value.supersedes !== null) {
+    if (typeof value.supersedes !== 'string' || !BATCH_ID_RE.test(value.supersedes))
+      throw invalid('lineage.supersedes must be a batch id')
+    out.supersedes = value.supersedes
+  }
+  return out
+}
+
 /* ───────────────────────────── public API ───────────────────────────────── */
 
 /**
@@ -686,9 +928,22 @@ export function createManifest(input) {
   if (input.target !== undefined && !TARGETS.includes(input.target))
     throw invalid(`target must be one of ${TARGETS.join(', ')}`)
 
+  const hasV2Blocks =
+    input.changes !== undefined || input.fuel !== undefined || input.lineage !== undefined
+  const schemaVersion =
+    input.schemaVersion === undefined
+      ? hasV2Blocks
+        ? SCHEMA_VERSION_V2
+        : SCHEMA_VERSION
+      : input.schemaVersion
+  if (!SUPPORTED_SCHEMA_VERSIONS.includes(schemaVersion))
+    throw invalid(`schemaVersion must be one of ${SUPPORTED_SCHEMA_VERSIONS.join(', ')}`)
+  if (schemaVersion === SCHEMA_VERSION && hasV2Blocks)
+    throw invalid('changes/fuel/lineage require schemaVersion 2')
+
   const manifest = {
     schema: SCHEMA_ID,
-    schemaVersion: SCHEMA_VERSION,
+    schemaVersion,
     generator: isPlainObject(input.generator)
       ? orderedObject(input.generator, GENERATOR_KEYS)
       : generatorIdentity(),
@@ -706,6 +961,14 @@ export function createManifest(input) {
     warnings: normalizeWarnings(input.warnings),
     limits: publicLimits(),
     scan: normalizeScan(input.scan)
+  }
+  if (schemaVersion === SCHEMA_VERSION_V2) {
+    const changes = normalizeChanges(input.changes)
+    if (changes !== undefined) manifest.changes = changes
+    const fuel = normalizeFuel(input.fuel)
+    if (fuel !== undefined) manifest.fuel = fuel
+    const lineage = normalizeLineage(input.lineage)
+    if (lineage !== undefined) manifest.lineage = lineage
   }
   // `target` is the single documented extension: the HANDOFF renderer needs the
   // user/workspace output target for H0, but the §5 fixed key order does not
@@ -817,8 +1080,13 @@ export function validateManifest(value) {
 
   if (value.schema !== SCHEMA_ID)
     add('error', 'MANIFEST_SCHEMA', 'schema', `schema must be "${SCHEMA_ID}"`)
-  if (value.schemaVersion !== SCHEMA_VERSION)
-    add('error', 'MANIFEST_SCHEMA_VERSION', 'schemaVersion', `schemaVersion must be ${SCHEMA_VERSION}`)
+  if (!SUPPORTED_SCHEMA_VERSIONS.includes(value.schemaVersion))
+    add(
+      'error',
+      'MANIFEST_SCHEMA_VERSION',
+      'schemaVersion',
+      `schemaVersion must be one of ${SUPPORTED_SCHEMA_VERSIONS.join(', ')}`
+    )
   if (typeof value.batchId !== 'string' || !BATCH_ID_RE.test(value.batchId))
     add('error', 'MANIFEST_BATCH_ID', 'batchId', 'batchId must match YYYYMMDDTHHmmssZ-xxxx')
   if (typeof value.createdAt !== 'string' || Number.isNaN(Date.parse(value.createdAt)))
@@ -918,6 +1186,69 @@ export function validateManifest(value) {
 
   if (value.target !== undefined && !TARGETS.includes(value.target))
     add('warn', 'MANIFEST_TARGET', 'target', `target must be one of ${TARGETS.join(', ')}`)
+
+  // P1 v2 optional blocks: presence only at schemaVersion 2; light shape checks
+  // so a verifier can report every problem in one pass.
+  const v2Blocks = ['changes', 'fuel', 'lineage'].filter((key) => value[key] !== undefined)
+  if (value.schemaVersion === SCHEMA_VERSION && v2Blocks.length > 0) {
+    add(
+      'warn',
+      'MANIFEST_VERSION_BLOCK',
+      v2Blocks.join(','),
+      `schemaVersion 1 must not carry ${v2Blocks.join('/')} blocks`
+    )
+  }
+  if (value.changes !== undefined) {
+    if (!isPlainObject(value.changes)) {
+      add('warn', 'MANIFEST_CHANGES', 'changes', 'must be an object')
+    } else {
+      if (typeof value.changes.available !== 'boolean')
+        add('warn', 'MANIFEST_CHANGES', 'changes.available', 'must be a boolean')
+      if (value.changes.totals !== undefined && !isPlainObject(value.changes.totals))
+        add('warn', 'MANIFEST_CHANGES', 'changes.totals', 'must be an object')
+      if (value.changes.files !== undefined) {
+        if (!Array.isArray(value.changes.files))
+          add('warn', 'MANIFEST_CHANGES', 'changes.files', 'must be an array')
+        else {
+          for (const [index, entry] of value.changes.files.entries()) {
+            if (!isPlainObject(entry) || typeof entry.path !== 'string')
+              add('warn', 'MANIFEST_CHANGES', `changes.files[${index}]`, 'entry must carry a string path')
+          }
+        }
+      }
+      if (value.changes.diffs !== undefined && !Array.isArray(value.changes.diffs))
+        add('warn', 'MANIFEST_CHANGES', 'changes.diffs', 'must be an array')
+    }
+  }
+  if (value.fuel !== undefined) {
+    if (!isPlainObject(value.fuel)) {
+      add('warn', 'MANIFEST_FUEL', 'fuel', 'must be an object')
+    } else {
+      for (const key of ['goals', 'jobs']) {
+        if (value.fuel[key] !== undefined && !isPlainObject(value.fuel[key]))
+          add('warn', 'MANIFEST_FUEL', `fuel.${key}`, 'must be an object')
+      }
+      if (isPlainObject(value.fuel.jobs) && typeof value.fuel.jobs.available !== 'boolean')
+        add('warn', 'MANIFEST_FUEL', 'fuel.jobs.available', 'must be a boolean')
+    }
+  }
+  if (value.lineage !== undefined) {
+    if (!isPlainObject(value.lineage)) {
+      add('warn', 'MANIFEST_LINEAGE', 'lineage', 'must be an object')
+    } else {
+      if (!Number.isInteger(value.lineage.sequence) || value.lineage.sequence < 2)
+        add('warn', 'MANIFEST_LINEAGE', 'lineage.sequence', 'must be an integer >= 2')
+      for (const key of ['previous', 'root']) {
+        if (typeof value.lineage[key] !== 'string' || !BATCH_ID_RE.test(value.lineage[key]))
+          add('warn', 'MANIFEST_LINEAGE', `lineage.${key}`, 'must be a batch id')
+      }
+      if (
+        value.lineage.supersedes !== undefined &&
+        (typeof value.lineage.supersedes !== 'string' || !BATCH_ID_RE.test(value.lineage.supersedes))
+      )
+        add('warn', 'MANIFEST_LINEAGE', 'lineage.supersedes', 'must be a batch id when present')
+    }
+  }
 
   findings.sort(
     (left, right) =>

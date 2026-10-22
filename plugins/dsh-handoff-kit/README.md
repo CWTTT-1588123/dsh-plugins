@@ -9,9 +9,9 @@ no network, no subprocess.
 
 | Surface | Name | Purpose |
 |---|---|---|
-| Tool | `handoff_pack` | `scan` / `create` / `verify` / `list` handoff packages |
+| Tool | `handoff_pack` | `scan` / `create` / `verify` / `list` / `append` / `update` handoff packages |
 | Tool | `handoff_load` | Read-only consumption: verify + trust verdict + drift + pointers (P1/M1) |
-| Command | `/handoff` | Human shortcut: create (default), scan, verify, list, resume |
+| Command | `/handoff` | Human shortcut: create (default), append, update, scan, verify, list, resume |
 | Skill | `handoff-pack` | When and how to generate / consume a handoff package |
 
 ## Output
@@ -53,6 +53,26 @@ filesystem service exposes no mtime. Evidence is therefore: parsed `.git` state
 session's `tool/call` metadata (paths / commands / counts, redacted and truncated;
 message bodies are never mined). `HANDOFF.md` marks every assertion with
 `[文件哈希]` / `[git]` / `[会话]` / `[输入]` / `[待验]`.
+
+## Continuous handoffs (P1/M2)
+
+`append` and `update` both write a **new** batch and record lineage; history is never rewritten:
+
+```text
+handoff_pack action=append previousBatchId=<id>   # continuation (default: latest batch)
+handoff_pack action=update supersedes=<id>        # replacement statement (default: latest batch)
+```
+
+`manifest.lineage = {sequence, previous, root, supersedes?}`; `verify` reports `LINEAGE_BROKEN`
+(previous batch missing/unreadable) and `SUPERSEDED_BATCH` (warn only — the old batch stays valid
+history). `create/append/update` also capture read-only P1 evidence when available:
+
+- `manifest.changes` — host `workspaceChanges` for the latest **completed** turn
+  (`{available, source, turn, totals, files[], diffs?}`; `includeDiffs=true` adds bounded hunks);
+- `manifest.fuel` — current goal and session-owned background jobs (read-only, never auto-executes);
+
+Both degrade to `available:false` + warning when the service/data is missing. `manifest.schemaVersion`
+becomes `2`; v1 manifests remain readable/verifiable.
 
 ## Consume (P1/M1)
 

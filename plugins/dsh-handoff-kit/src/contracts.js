@@ -14,9 +14,13 @@
 /** Package name; also the Cordis plugin name. */
 export const PLUGIN_NAME = 'dsh-handoff-kit'
 /** One semantic version for the generator, mirrored in package.json. */
-export const PLUGIN_VERSION = '0.1.0'
+export const PLUGIN_VERSION = '0.2.0'
 /** Manifest schema version owned by this generator. */
 export const SCHEMA_VERSION = 1
+/** P1/M2 manifest schema version: v1 fields + optional changes/fuel/lineage. */
+export const SCHEMA_VERSION_V2 = 2
+/** Schema versions this package can build (v1 is read-only compatible). */
+export const SUPPORTED_SCHEMA_VERSIONS = Object.freeze([SCHEMA_VERSION, SCHEMA_VERSION_V2])
 /** `schema` identifier written into every manifest. */
 export const SCHEMA_ID = 'dsh-handoff-kit/handoff'
 /** Model-facing tool name. */
@@ -33,8 +37,8 @@ export const MANIFEST_FILE = 'manifest.json'
 export const EVIDENCE_DIR = 'evidence'
 export const EVIDENCE_FILES_DIR = 'evidence/files'
 
-/** The four tool actions, in a stable order. */
-export const ACTIONS = Object.freeze(['scan', 'create', 'verify', 'list'])
+/** The four tool actions, in a stable order (append/update are P1/M2 additions). */
+export const ACTIONS = Object.freeze(['scan', 'create', 'verify', 'list', 'append', 'update'])
 /** Output targets. `user` is the default; `workspace` is the explicit downgrade. */
 export const TARGETS = Object.freeze(['user', 'workspace'])
 /** Target directory suffixes under each root. */
@@ -64,6 +68,8 @@ export const ERROR = Object.freeze({
   BATCH_NOT_FOUND: 'HANDOFF_BATCH_NOT_FOUND',
   RESUME_NOT_FOUND: 'HANDOFF_RESUME_NOT_FOUND',
   VERIFY_INVALID: 'HANDOFF_VERIFY_INVALID',
+  APPEND_TARGET_MISSING: 'HANDOFF_APPEND_TARGET_MISSING',
+  LINEAGE_CYCLE: 'HANDOFF_LINEAGE_CYCLE',
   MANIFEST_MISSING: 'HANDOFF_MANIFEST_MISSING',
   MANIFEST_INVALID: 'HANDOFF_MANIFEST_INVALID',
   WRITE_FAILED: 'HANDOFF_WRITE_FAILED',
@@ -117,6 +123,14 @@ export const LIMITS = Object.freeze({
   sessionMaxCommandChars: 300,
   /** scan preview text cap (characters). */
   previewChars: 12000,
+  /** P1/M2 bounds: workspaceChanges evidence. */
+  changesMaxFiles: 200,
+  changesMaxDiffs: 20,
+  changesDiffBytes: 64 * 1024,
+  changesDiffTotalBytes: 512 * 1024,
+  /** P1/M2 bounds: goal/jobs read-only fuel. */
+  fuelMaxJobs: 50,
+  fuelTextChars: 500,
   /** Declared tool timeout; enforced by dsh-tool-call-timeout-policy. */
   toolTimeoutMs: 120000
 })
@@ -126,10 +140,11 @@ export const TOOL_TIMEOUT_MS = LIMITS.toolTimeoutMs
 
 /** Tool description shown to the model (English, per ADR decision 10). */
 export const TOOL_DESCRIPTION =
-  'Create, scan, verify, or list deterministic session handoff packages ' +
+  'Create, scan, verify, list, append, or update deterministic session handoff packages ' +
   '(HANDOFF.md + manifest.json) for the current workspace. Use before ending a long ' +
-  'session or handing work to a new session; a new session should verify and read ' +
-  'HANDOFF.md before trusting its claims.'
+  'session or handing work to a new session; append/update create a new batch linked to the ' +
+  'previous one (append-only, never rewriting history). A new session should call handoff_load ' +
+  '(or verify) before trusting a package.'
 
 /** A scalar that may be absent as `null` when a file captured it that way. */
 const nullableString = () => ({ oneOf: [{ type: 'string' }, { type: 'null' }] })
@@ -284,6 +299,41 @@ export const TOOL_OUTPUT_SCHEMA = Object.freeze({
         files: { type: 'array', items: FILE_ENTRY_SCHEMA },
         tree: { type: 'array', items: TREE_ENTRY_SCHEMA },
         explicitFiles: { type: 'integer' }
+      }
+    },
+    changes: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['available'],
+      properties: {
+        available: { type: 'boolean' },
+        source: { type: 'string' },
+        turn: nullableInteger(),
+        truncated: { type: 'boolean' },
+        note: { type: 'string' },
+        totals: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['files', 'added', 'deleted', 'binary', 'oversized'],
+          properties: {
+            files: { type: 'integer' },
+            added: { type: 'integer' },
+            deleted: { type: 'integer' },
+            binary: { type: 'integer' },
+            oversized: { type: 'integer' }
+          }
+        }
+      }
+    },
+    lineage: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['sequence', 'previous', 'root'],
+      properties: {
+        sequence: { type: 'integer' },
+        previous: { type: 'string' },
+        root: { type: 'string' },
+        supersedes: nullableString()
       }
     },
     preview: {
@@ -444,6 +494,22 @@ export const TOOL_ARGUMENTS_SCHEMA = Object.freeze({
       default: false,
       description:
         'Allow overwriting an existing or incomplete batch directory. Default createIfAbsent.'
+    },
+    previousBatchId: {
+      type: 'string',
+      description:
+        'append: previous batch id (default: latest batch). The new batch records lineage and does not modify the previous batch.'
+    },
+    supersedes: {
+      type: 'string',
+      description:
+        'update: batch id this new batch supersedes (default: latest batch). Append-only chain; the old batch stays untouched.'
+    },
+    includeDiffs: {
+      type: 'boolean',
+      default: false,
+      description:
+        'create/append/update: also capture bounded per-file workspaceChanges diffs (<=20 files, 64 KiB each, 512 KiB total).'
     }
   }
 })
@@ -745,20 +811,31 @@ export function validateToolArgs(raw) {
   const action = raw.action
   if (typeof action !== 'string' || !ACTIONS.includes(action))
     throw invalid(`action must be one of ${ACTIONS.join(', ')}`)
+  const isCreateLike = action === 'create' || action === 'append' || action === 'update'
   const target = raw.target === undefined ? 'user' : raw.target
   if (typeof target !== 'string' || !TARGETS.includes(target))
     throw invalid(`target must be one of ${TARGETS.join(', ')}`)
   const batchId = consumeString(raw, 'batchId', 40)
   if (batchId !== undefined && !BATCH_ID_RE.test(batchId))
     throw invalid('batchId must match YYYYMMDDTHHmmssZ-xxxx (lower-case hex suffix)')
-  if (action === 'create' && batchId !== undefined)
-    throw invalid('batchId locates verify/list; create always mints a new batch id')
   if (action !== 'verify' && action !== 'list' && batchId !== undefined)
     throw invalid('batchId is only valid for verify and list')
+  const previousBatchId = consumeString(raw, 'previousBatchId', 40)
+  if (previousBatchId !== undefined && !BATCH_ID_RE.test(previousBatchId))
+    throw invalid('previousBatchId must match YYYYMMDDTHHmmssZ-xxxx')
+  const supersedes = consumeString(raw, 'supersedes', 40)
+  if (supersedes !== undefined && !BATCH_ID_RE.test(supersedes))
+    throw invalid('supersedes must match YYYYMMDDTHHmmssZ-xxxx')
+  if (action !== 'append' && previousBatchId !== undefined)
+    throw invalid('previousBatchId is only valid for append')
+  if (action !== 'update' && supersedes !== undefined)
+    throw invalid('supersedes is only valid for update')
   const all = consumeBoolean(raw, 'all', false)
   if (all && action !== 'list') throw invalid('all is only valid for list')
   const force = consumeBoolean(raw, 'force', false)
-  if (force && action !== 'create') throw invalid('force is only valid for create')
+  if (force && !isCreateLike) throw invalid('force is only valid for create/append/update')
+  const includeDiffs = consumeBoolean(raw, 'includeDiffs', false)
+  if (includeDiffs && !isCreateLike) throw invalid('includeDiffs is only valid for create/append/update')
 
   return {
     action,
@@ -774,6 +851,9 @@ export function validateToolArgs(raw) {
     files: consumeStringArray(raw, 'files', LIMITS.maxExplicitFiles, 400),
     copyFiles: consumeBoolean(raw, 'copyFiles', false),
     batchId,
+    previousBatchId,
+    supersedes,
+    includeDiffs,
     all,
     force
   }

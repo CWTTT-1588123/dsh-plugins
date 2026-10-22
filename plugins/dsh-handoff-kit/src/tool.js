@@ -43,10 +43,18 @@ export function summarizeResult(value) {
       )
       break
     case 'create':
+    case 'append':
+    case 'update':
       lines.push(
-        `created ${value.batchId ?? 'batch'} at ${value.displayDir ?? value.dir ?? '(unknown dir)'} ` +
+        `${value.action === 'create' ? 'created' : value.action === 'append' ? 'appended' : 'updated (supersedes)'} ` +
+          `${value.batchId ?? 'batch'} at ${value.displayDir ?? value.dir ?? '(unknown dir)'} ` +
           `(${value.artifacts?.length ?? 0} artifacts, ${value.totals?.artifactBytes ?? 0} bytes)`
       )
+      if (value.lineage !== undefined)
+        lines.push(
+          `lineage: sequence ${value.lineage.sequence}, previous ${value.lineage.previous}` +
+            (value.lineage.supersedes === undefined ? '' : `, supersedes ${value.lineage.supersedes}`)
+        )
       lines.push(`verify with handoff_pack action=verify batchId=${value.batchId ?? ''}`)
       break
     case 'verify':
@@ -82,9 +90,9 @@ export function createTool(service) {
       }
     },
     timeoutMs: TOOL_TIMEOUT_MS,
-    // Reads may run together; `create` writes one batch directory, so it stays exclusive.
+    // Reads may run together; batch-writing actions are exclusive.
     isConcurrencySafe(args) {
-      return args?.action !== 'create'
+      return !['create', 'append', 'update'].includes(args?.action)
     },
     async execute(rawArgs, exec) {
       const args = validateToolArgs(rawArgs)

@@ -151,6 +151,18 @@ function renderH0(manifest) {
   lines.push(`- 批次：${codeInline(manifest.batchId)}`)
   lines.push(`- 生成时间：${codeInline(manifest.createdAt)}`)
   lines.push(`- 输出目标：${resolveTarget(manifest)}`)
+  const lineage = isPlainObject(manifest.lineage) ? manifest.lineage : null
+  if (lineage !== null) {
+    const sequence = integerOf(lineage.sequence)
+    const previous = stringOf(lineage.previous)
+    const supersedes = stringOf(lineage.supersedes)
+    if (sequence !== null && previous !== null) {
+      lines.push(
+        `- 批次血缘：第 ${sequence} 代，承接 ${codeInline(previous)}` +
+          (supersedes === null ? '' : `（替代 ${codeInline(supersedes)}；旧批次保持只读）`)
+      )
+    }
+  }
   const generatorName = stringOf(generator.name)
   lines.push(
     generatorName === null
@@ -188,6 +200,34 @@ function renderH1(manifest) {
   const decisions = stringsOf(inputs.decisions)
   if (decisions.length === 0) lines.push(`- ${MISSING_CALLER}`)
   else for (const decision of decisions) lines.push(`- ${decision}`)
+  lines.push('')
+
+  lines.push('### 本会话改动（workspaceChanges，仅已完成 turn）', '')
+  const changes = isPlainObject(manifest.changes) ? manifest.changes : null
+  if (changes === null || changes.available !== true) {
+    lines.push(
+      `- ${MISSING}（${stringOf(changes?.note) ?? '本会话没有可用的 workspaceChanges 证据'}）`
+    )
+  } else {
+    const totals = objectOf(changes.totals)
+    lines.push(
+      `- 已完成 turn 共 ${integerOf(totals.files) ?? 0} 个文件：` +
+        `+${integerOf(totals.added) ?? 0} / −${integerOf(totals.deleted) ?? 0}` +
+        `（binary ${integerOf(totals.binary) ?? 0}，oversized ${integerOf(totals.oversized) ?? 0}）`
+    )
+    const changed = (Array.isArray(changes.files) ? changes.files : [])
+      .filter((entry) => isPlainObject(entry))
+      .slice(0, 15)
+    if (changed.length === 0) lines.push(`- ${MISSING}`)
+    else {
+      for (const file of changed) {
+        lines.push(
+          `- \`${stringOf(file.path) ?? MISSING}\`：+${integerOf(file.added) ?? 0} / −${integerOf(file.deleted) ?? 0}`
+        )
+      }
+      if (changes.truncated === true) lines.push('- （改动文件列表已截断，完整上限见 manifest.limits / changes.note）')
+    }
+  }
   lines.push('')
 
   lines.push('### 会话触碰的文件（按 lastSeq 降序，最多 15 条）', '')
@@ -333,6 +373,80 @@ function buildAssertions(manifest) {
     assertions.push({ label: '待验', text: '工作区扫描条目数未提供，无法核对采集范围。' })
   }
 
+  const changes = isPlainObject(manifest.changes) ? manifest.changes : null
+  if (changes !== null && changes.available === true) {
+    const totals = objectOf(changes.totals)
+    assertions.push({
+      label: '改动',
+      text:
+        `本会话已完成 turn 的 workspaceChanges：${integerOf(totals.files) ?? 0} 个文件，` +
+        `+${integerOf(totals.added) ?? 0} / −${integerOf(totals.deleted) ?? 0}` +
+        `${changes.truncated === true ? '（列表已截断）' : ''}；` +
+        '来源为宿主 workspaceChanges 快照，只覆盖已完成 turn。'
+    })
+    const changed = (Array.isArray(changes.files) ? changes.files : [])
+      .filter((entry) => isPlainObject(entry))
+      .slice(0, 3)
+    for (const file of changed) {
+      assertions.push({
+        label: '改动',
+        text:
+          `文件 \`${stringOf(file.path) ?? MISSING}\` 在已完成 turn 中 +${integerOf(file.added) ?? 0} / −${integerOf(file.deleted) ?? 0}` +
+          `${file.binary === true ? '（binary）' : ''}${file.oversized === true ? '（oversized，未取全文）' : ''}。`
+      })
+    }
+  } else {
+    assertions.push({
+      label: '待验',
+      text: `本会话 workspaceChanges 不可用（${stringOf(changes?.note) ?? '原因见 H6 warnings'}），不产出“本会话改动”断言。`
+    })
+  }
+
+  const fuel = isPlainObject(manifest.fuel) ? manifest.fuel : null
+  if (fuel !== null && isPlainObject(fuel.goals)) {
+    if (fuel.goals.available === true && isPlainObject(fuel.goals.goal)) {
+      const goal = fuel.goals.goal
+      assertions.push({
+        label: 'goal',
+        text:
+          `当前 goal \`${stringOf(goal.id) ?? MISSING}\`（${stringOf(goal.phase) ?? MISSING}，` +
+          `rounds ${integerOf(goal.roundsStarted) ?? 0}/${integerOf(goal.maxGoalRounds) ?? 0}）：` +
+          `${stringOf(goal.objective) ?? '（无 objective）'}`
+      })
+    } else if (fuel.goals.available === true) {
+      assertions.push({
+        label: 'goal',
+        text: `当前会话没有 goal（goals 服务可用；${stringOf(fuel.goals.note) ?? '无'}）。`
+      })
+    } else {
+      assertions.push({
+        label: '待验',
+        text: `goal 燃料不可用（${stringOf(fuel.goals.note) ?? '原因见 H6 warnings'}）。`
+      })
+    }
+  }
+  if (fuel !== null && isPlainObject(fuel.jobs)) {
+    if (fuel.jobs.available === true) {
+      const statusCounts = objectOf(fuel.jobs.statusCounts)
+      const parts = Object.keys(statusCounts)
+        .filter((status) => Number.isInteger(statusCounts[status]))
+        .sort()
+        .map((status) => `${status}=${statusCounts[status]}`)
+      assertions.push({
+        label: 'job',
+        text:
+          `后台 jobs：${integerOf(fuel.jobs.count) ?? 0} 个` +
+          (parts.length > 0 ? `（${parts.join('、')}）` : '（无）') +
+          '；只读快照，未执行任何 job。'
+      })
+    } else {
+      assertions.push({
+        label: '待验',
+        text: `jobs 燃料不可用（${stringOf(fuel.jobs.note) ?? '原因见 H6 warnings'}）。`
+      })
+    }
+  }
+
   const hashed = files.filter(
     (file) => typeof file.sha256 === 'string' && SHA256_RE.test(file.sha256)
   )
@@ -421,8 +535,9 @@ function renderH4(manifest, assertions) {
     sectionHeading('H4'),
     '',
     '> 证据标签：`[文件哈希]`=本次对文件内容计算的 sha256；`[git]`=读取 `.git` 元数据；' +
-      '`[会话]`=会话工具事件计数（不含消息正文）；`[输入]`=调用方陈述，生成器未独立核验；' +
-      '`[待验]`=本次未覆盖，需新会话按 H8 复核。',
+      '`[会话]`=会话工具事件计数（不含消息正文）；`[改动]`=宿主 workspaceChanges 的已完成 turn 改动；' +
+      '`[goal]`/`[job]`=goal 与后台 jobs 的只读快照；' +
+      '`[输入]`=调用方陈述，生成器未独立核验；`[待验]`=本次未覆盖，需新会话按 H8 复核。',
     `> 核对时间：${codeInline(manifest.createdAt)}（读取与哈希均发生在该批次采集窗口内）。`,
     ''
   ]
@@ -467,6 +582,10 @@ function renderH6(manifest) {
   lines.push('### 已知限制（生成器如实声明）', '')
   lines.push('- 无 mtime：采集不产出“最近改动时间”，H1 以会话 trace 与 git reflog 替代。')
   lines.push('- 无 git status：不报告未提交 / 未跟踪改动；只读取 `.git` 元数据。')
+  lines.push(
+    '- workspaceChanges 只覆盖**已完成 turn**：create 发生在 turn 中时，当前 turn 的改动尚未记录；' +
+      'Session 结束后宿主不再提供 summary（新会话只能读包内证据，不能回读旧 Session 的改动）。'
+  )
   lines.push('- 无删除原语：写入失败时不做清理，可能留下不完整批次（以 manifest.json 是否存在判断完成）。')
   lines.push(
     '- 不执行代码：不运行测试 / 构建 / 命令；H4 中未标注 `[文件哈希]` / `[git]` / `[会话]` / `[输入]` 的断言不可当作已验证。'
@@ -507,7 +626,11 @@ function renderH8(manifest) {
   )
   const samples = hashed.slice(0, 3)
   const lines = [sectionHeading('H8'), '']
-  lines.push(`1. 先运行 \`handoff_pack verify batchId=${batchId}\`；校验失败先报告，不要继续。`)
+  lines.push(
+    `1. 先运行 \`handoff_load batchId=${batchId}\`（缺省=最新批次；内部 verify + trust 判定）；` +
+      '只有 trust=verified 才继续，stale/invalid 先看 findings。' +
+      `需要纯哈希校验时运行 \`handoff_pack verify batchId=${batchId}\`。`
+  )
   lines.push('2. 按 H2 → H3 → H4 → H8 顺序阅读：先建立概念与代码地图，再核对事实。')
   lines.push('3. 抽查至少 3 条 H4 断言的文件哈希（先把 `$WORKSPACE` 替换为实际工作区绝对路径再执行）：')
   lines.push(

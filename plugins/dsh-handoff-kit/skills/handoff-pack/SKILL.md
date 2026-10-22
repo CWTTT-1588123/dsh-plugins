@@ -20,8 +20,17 @@ description: 生成、校验或消费当前工作区的确定性会话交接包�
    - `title` / `goal` / `summary`：本会话实际做了什么，**生成器不会编造**；
    - `decisions` / `nextSteps` / `concepts` / `flow` / `risks`：结构化条目；
    - `files`：关键文件的工作区相对路径（绝对路径/`..` 会被拒绝）；
-   - `copyFiles=true`：把关键文件脱敏后复制进 `evidence/files/`（默认关闭）。
+   - `copyFiles=true`：把关键文件脱敏后复制进 `evidence/files/`（默认关闭）；
+   - `includeDiffs=true`：附上有界 workspaceChanges diff（≤20 文件/单文件 64 KiB/总 512 KiB）。
 3. 输出默认在用户级 `$DSH_HOME/handoff/<project-key>/<batch-id>/`；只有显式 `target=workspace` 才写 `<workspace>/.dsh/handoff/`。没有静默回退：权限不足会返回结构化错误和修法。
+4. **同一工作连续交接**（P1/M2）：
+   - `handoff_pack action=append previousBatchId=<上一批>` → 新建批次并记录血缘（默认最新批次）；
+   - `handoff_pack action=update supersedes=<被替代批>` → 新建批次声明替代（默认最新批次）；
+   - 两者都**不原地修改历史批次**；`verify` 会检查血缘（`LINEAGE_BROKEN`）与"已被替代"（`SUPERSEDED_BATCH`）。
+
+生成时自动附带两类只读燃料（缺失时降级为 `available:false` + warning，不阻塞）：
+- `changes`：宿主 `workspaceChanges` 的**已完成 turn**改动（H1「本会话改动」、H4 `[改动]`）；
+- `fuel`：当前 goal 与后台 jobs（只读，不自动执行）。
 
 ## 权威顺序
 

@@ -5,18 +5,43 @@
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-22
+
+P1（0.2.x）完成：消费闭环 + 真实改动证据 + 批次血缘。验收证据见
+[docs/handoff-kit/acceptance/P1.md](docs/handoff-kit/acceptance/P1.md)。
+
 ### Added
 
-- 仓库初始化：插件仓库与业务仓库（stand）分离。
-- `ROADMAP.md`（P0–P3 单一权威路线）、`docs/adr/` 决策记录。
-- 迁入 3 份 handoff-kit 历史设计文档；新增 `P0_implementation_plan.md`（现行权威）。
-- `docs/handoff-kit/START_PROMPT.md`：新会话实施 P0 的启动提示词。
-- `docs/handoff-kit/design/P1_plan.md`：P1（0.2.x）实施计划（2026-10-22 已评审通过；
-  M1 消费闭环 / M2 workspaceChanges+血缘 / M3 仅接口与文档；Q1–Q5 决议见文档 §10）。
-  不改变已发布 0.1.0 行为。
-- **P1 M1（开发中）**：`handoff_load` 工具（只读消费：verify + `trust=verified|stale|invalid`
-  + findings/drift + 指针 + `include=summary|sections|full` 有界摘录）；
-  `/handoff resume [<batchId>]` 命令（同一 trust 判定的中文摘要）。
+- **M1 消费闭环**：`handoff_load` 工具（只读：内部 verify → `trust=verified|stale|invalid`
+  + findings/drift + 指针；`include=summary|sections|full` 有界摘录）；
+  `/handoff resume [<batchId>]`（同一 trust 判定的中文摘要）。
+- **M2 真实改动证据**：`manifest@2` 可选 `changes` 块——宿主 `workspaceChanges` 的
+  **已完成 turn** 改动（`{available,source,turn,totals,files[],diffs?}`），
+  `includeDiffs=true` 附有界 diff（≤20 文件/单文件 64 KiB/总 512 KiB）；H1「本会话改动」、
+  H4 `[改动]` 标签；不可用时 `available:false` + `CHANGES_UNAVAILABLE` warning。
+- **M2 只读燃料**：`manifest@2` 可选 `fuel` 块——当前 goal 与 session-owned jobs
+  （只读快照、不自动执行；缺失降级 `available:false` + warning）；H4 `[goal]`/`[job]` 标签。
+- **M2 批次血缘**：`handoff_pack action=append previousBatchId=<id>`（连续交接，默认最新批次）
+  与 `action=update supersedes=<id>`（替代声明，默认最新批次）；新建批次 +
+  `lineage{sequence,previous,root,supersedes?}`，**不原地修改历史批次**；H0 批次血缘、
+  verify 新增 `LINEAGE_BROKEN`（error）/`SUPERSEDED_BATCH`（warn）。
+- M3 接口与文档：LLM 叙述增强与自动草稿钩子的未来合同保留在 P1_plan §3.5（按 Q1 不实现运行时）。
+
+### Changed
+
+- `manifest.schemaVersion` 升为 `2`（v1 字段保留 + 可选 `changes`/`fuel`/`lineage`；
+  v1 批次只读兼容、不迁移）。
+- H8 首步改为 `handoff_load`（纯哈希校验仍可用 `handoff_pack verify`）；
+  技能/README 的消费流程同步更新。
+- `/handoff` 新增 `append`/`update`/`resume` 动作与 `--previous/--supersedes/--include-diffs/
+  --include/--no-verify` 选项。
+
+### Known limitations（P1）
+
+- workspaceChanges 只覆盖**已完成 turn**；create 发生在 turn 中时看不到当前 turn 改动；
+  Session 结束后宿主不再提供 summary（新会话只能读包内证据）。
+- 无删除 API：E2E/验收产生的批次保留在 `$DSH_HOME/handoff` 与工作区 `.dsh/handoff`（可手动删）。
+- M3 的 LLM/自动钩子仅文档合同，未实现运行时（默认关的能力也未实现）。
 
 ## [0.1.0] - 2026-10-22
 

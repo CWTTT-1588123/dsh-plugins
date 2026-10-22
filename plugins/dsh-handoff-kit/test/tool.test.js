@@ -91,6 +91,18 @@ test('summarizeResult renders one to three lines per action', () => {
   assert.match(create[1], /verify/)
   assert.match(create[2], /1 warning/)
 
+  const append = summarizeResult({
+    action: 'append',
+    batchId: 'b2',
+    displayDir: 'C:\\out\\b2',
+    artifacts: [{}],
+    totals: { artifactBytes: 10 },
+    lineage: { sequence: 2, previous: 'b1', root: 'b1' },
+    warnings: []
+  })
+  assert.match(append[0], /appended/)
+  assert.match(append[1], /sequence 2, previous b1/)
+
   const verify = summarizeResult({
     action: 'verify',
     verification: { batchId: 'b1', ok: false, counts: { errors: 2, warnings: 1 } },

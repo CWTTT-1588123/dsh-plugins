@@ -78,6 +78,8 @@ export function createFakeCtx(options = {}) {
   }
 
   Object.assign(services, { fs, sessions, sandboxPolicy, workingDirectory })
+  // Extra optional services injected by tests (workspaceChanges, goals, jobs).
+  Object.assign(services, options.services ?? {})
 
   const ctx = {
     fs,

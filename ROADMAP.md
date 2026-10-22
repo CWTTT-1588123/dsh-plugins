@@ -9,7 +9,7 @@
 | 阶段 | 版本 | 目标 | 状态 | 设计 | 验收 |
 |---|---|---|---|---|---|
 | P0 | 0.1.x | 手动生成 + 校验闭环 | **done**（0.1.0，2026-10-22） | [P0 实施计划](docs/handoff-kit/design/P0_implementation_plan.md) | [P0 验收记录](docs/handoff-kit/acceptance/P0.md) |
-| P1 | 0.2.x | 真实改动证据 + 消费闭环 + 轻自动 | **M1 验收通过**（M2 待开工） | [P1 实施计划](docs/handoff-kit/design/P1_plan.md) | [P1 验收记录](docs/handoff-kit/acceptance/P1.md) |
+| P1 | 0.2.x | 真实改动证据 + 消费闭环 + 轻自动 | **done**（0.2.0，2026-10-22） | [P1 实施计划](docs/handoff-kit/design/P1_plan.md) | [P1 验收记录](docs/handoff-kit/acceptance/P1.md) |
 | P2 | 0.3.x | 协作与可视化 | 未开始 | — | — |
 | P3 | 1.0 | 规范与分发 | 未开始 | — | — |
 
@@ -39,9 +39,9 @@ fake 策略单测为补充而非替代。剩下的只是 P0 设计边界（无 g
 
 **交付物**：`plugins/dsh-handoff-kit/`、`docs/handoff-kit/acceptance/P0.md`、CHANGELOG 0.1.0。
 
-## P1 — 好用（0.2.x）
+## P1 — 好用（0.2.x）**（done）**
 
-- **M1 消费闭环**：`handoff_load` 工具 / `/handoff resume`（verify → trust 判定 → 指针式读取，不写盘）；
+- **M1 消费闭环（done）**：`handoff_load` 工具 / `/handoff resume`（verify → trust 判定 → 指针式读取，不写盘）；
 - **M2 真实证据与血缘**：接入 `ctx.workspaceChanges` 获取会话真实文件改动/差异摘要（**保持禁子进程**）；
   批次 `append` / `update` 与 `supersedes` 链（新建批次 + 血缘，**不原地改历史批次**）；
   goal / jobs 只读燃料（确定性证据，不引入自动执行）；
@@ -51,7 +51,13 @@ fake 策略单测为补充而非替代。剩下的只是 P0 设计边界（无 g
   （2026-10-22 评审决议 Q1；P1 运行时无 LLM 调用、无自动写入）。
 
 **设计文档**：[`docs/handoff-kit/design/P1_plan.md`](docs/handoff-kit/design/P1_plan.md)（v1，2026-10-22 **已评审通过**，Q1–Q5 决议见文档 §10）。
-**M1 验收**：[`docs/handoff-kit/acceptance/P1.md`](docs/handoff-kit/acceptance/P1.md)（`handoff_load` + `/handoff resume` 均实机通过，M1 验收通过）。
+
+**验收结论**（2026-10-22）：M1 消费闭环（`handoff_load`/`/handoff resume`）实机通过；
+M2 真实改动证据与血缘（manifest@2、workspaceChanges、goal/jobs 燃料、`append`/`update`/`supersedes`、
+verify 血缘检查）实机通过（221/221 单测、外部哈希复算、v1 批次兼容）；M3 按 Q1 决议仅保留接口与文档、
+P1 运行时无 LLM 调用/无自动写入。已知缺口为宿主契约限制（当前 turn 改动不可见、Session 关闭后
+summary 不可读）与无删除 API，已在验收记录挂账。详见
+[P1 验收记录](docs/handoff-kit/acceptance/P1.md)。
 
 **门槛**：真项目连续两次交接；漂移检测准确；M1/M2 的写入均显式触发；成本与隐私可测
 （M3 仅接口与文档，自动草稿的"不误触发"验收留到真正实现 M3 时）。

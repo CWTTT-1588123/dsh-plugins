@@ -207,7 +207,7 @@ changes: {
 
 ## 11. 本版新增问题/欠账（评审时注意）
 
-- 【待验】`session.ownEvents()` 是否稳定包含 `workspace/changes` 事件、以及 mid-turn create 时最后一条已完成 turn 的 seq 选取：M2 开工前先用 30 分钟 spike 验证（写最小脚本 + fake ctx），验证结果写回本文件。
+- 【已核实】`session.ownEvents()` 稳定包含 `workspace/changes` 事件（M2 spike，2026-10-22：当前会话 3 条事件 seq=1227/1349/1580 对应 turn 1/4/6；当前未结束 turn 无事件，证实"只覆盖已完成 turn"）；mid-turn create 取最后一条已完成 turn 的 seq，M2 已按此实现。
 - 【待验】`ctx.jobs.list(callerSessionId)` 在无 job 控制器时的行为（可能抛错而不是返回空）：M2 用 try/catch + warning 包裹，并以 fake 单测覆盖。
 - 【推断】`handoff_load` 的 contexts 成本增加可接受（小 schema），但需要在 L1 记录实际 tools token 增量（`cordis_inspect Tool.listTools` 大小对比）。
-- 本文档不改变 P0 验收结论；M1 开工前需要用户确认 §10 的 Q1–Q5。
+- 本文档不改变 P0 验收结论；M2 已按本计划实现并通过单测（详见 [P1 验收记录](../acceptance/P1.md)）。

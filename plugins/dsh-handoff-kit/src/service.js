@@ -33,6 +33,7 @@ import {
   LOAD_LIMITS,
   MANIFEST_FILE,
   SCHEMA_VERSION,
+  SCHEMA_VERSION_V2,
   SUMS_FILE,
   WORKSPACE_HANDOFF_SUBDIR,
   errorMessageOf,
@@ -59,6 +60,15 @@ import {
 import { readGitInfo } from './git.js'
 import { collectWorkspace, readCopyCandidate } from './collect.js'
 import { buildSessionTrace } from './session-trace.js'
+import {
+  boundDiffEntries,
+  buildChanges,
+  buildDiffEntry,
+  findLatestChangesEvent,
+  normalizeChangePath,
+  unavailableChanges
+} from './changes.js'
+import { buildFuel } from './fuel.js'
 import { isDeniedFile, redactDeep, redactText, scanSecrets } from './redact.js'
 import {
   artifactEntry,
@@ -101,6 +111,8 @@ const RESULT_KEY_ORDER = [
   'redactions',
   'warnings',
   'scan',
+  'changes',
+  'lineage',
   'preview',
   'verification',
   'batches',
@@ -481,6 +493,216 @@ export function createService({
     return root
   }
 
+  /**
+   * Read the host's workspaceChanges evidence for the latest *completed* turn.
+   * Session-scoped by contract: the service only serves live sessions, and the
+   * open turn has no `workspace/changes` event yet.
+   */
+  async function collectChanges({ context, exec, includeDiffs }) {
+    const collectedAt = now().toISOString()
+    if (context.session === null) return unavailableChanges('no live session for this call', collectedAt)
+    const service = typeof ctx.get === 'function' ? ctx.get('workspaceChanges') : undefined
+    if (service === undefined || service === null || typeof service.summary !== 'function')
+      return unavailableChanges('workspaceChanges service is unavailable in this profile', collectedAt)
+    const events = typeof context.session.ownEvents === 'function' ? context.session.ownEvents() : []
+    const found = findLatestChangesEvent(events)
+    if (found === undefined)
+      return unavailableChanges('no completed turn with workspace changes in this session', collectedAt)
+    let summary
+    try {
+      summary = service.summary(context.session.id, found.seq)
+    } catch (error) {
+      return unavailableChanges(`workspaceChanges.summary failed: ${errorMessageOf(error)}`, collectedAt)
+    }
+    if (summary === undefined || summary === null)
+      return unavailableChanges('workspaceChanges summary is no longer available (session disposed?)', collectedAt)
+    const block = buildChanges({
+      summary,
+      contexts: context.contexts,
+      limits: LIMITS,
+      collectedAt
+    })
+    if (includeDiffs !== true || block.available !== true) return block
+    const rawFiles = Array.isArray(summary.files) ? summary.files : []
+    const signal = exec?.signal ?? new AbortController().signal
+    const entries = []
+    for (let index = 0; index < rawFiles.length && entries.length < LIMITS.changesMaxDiffs; index += 1) {
+      const file = rawFiles[index]
+      if (file === null || typeof file !== 'object' || typeof file.path !== 'string') continue
+      if (file.binary === true || file.oversized === true) continue
+      const path = normalizeChangePath(file.path, context.contexts)
+      if (path === undefined) continue
+      try {
+        const diff = await service.diff(context.session.id, found.seq, index, signal)
+        const entry = buildDiffEntry({ path, diff })
+        if (entry !== undefined) entries.push(entry)
+      } catch {
+        /* one unreadable diff must not fail the whole handoff */
+      }
+    }
+    block.diffs = boundDiffEntries(entries, LIMITS.changesDiffTotalBytes)
+    return block
+  }
+
+  /** Read optional goal/jobs fuel; every failure degrades to available:false. */
+  async function collectFuel({ context, exec }) {
+    const agent = exec?.agent
+    const goalsService = typeof ctx.get === 'function' ? ctx.get('goals') : undefined
+    let goal
+    let goalAvailable = false
+    let goalNote
+    if (agent === undefined || agent === null) goalNote = 'no live agent for this call'
+    else if (goalsService === undefined || goalsService === null || typeof goalsService.get !== 'function')
+      goalNote = 'goals service is unavailable in this profile'
+    else {
+      try {
+        goal = goalsService.get(agent)
+        goalAvailable = true
+      } catch (error) {
+        goalNote = `goals.get failed: ${errorMessageOf(error)}`
+      }
+    }
+    const jobsService = typeof ctx.get === 'function' ? ctx.get('jobs') : undefined
+    let jobs
+    let jobsNote
+    if (jobsService === undefined || jobsService === null || typeof jobsService.list !== 'function')
+      jobsNote = 'jobs service is unavailable in this profile'
+    else {
+      try {
+        jobs = jobsService.list(context.session?.id)
+      } catch (error) {
+        jobsNote = `jobs.list failed: ${errorMessageOf(error)}`
+      }
+    }
+    return buildFuel({
+      goal,
+      goalAvailable,
+      jobs,
+      sessionId: context.session?.id,
+      limits: LIMITS,
+      goalNote,
+      jobsNote
+    })
+  }
+
+  /**
+   * Resolve the append/update lineage target: an explicit previous/superseded
+   * batch id or the latest complete batch. Refuses to link a missing or
+   * unreadable batch (no partial history).
+   */
+  async function resolveLineage({ args, context, io, root, projectKeyName, batchId }) {
+    if (args.action !== 'append' && args.action !== 'update') return undefined
+    const projectDir = join(root, projectKeyName)
+    const requested = args.action === 'append' ? args.previousBatchId : args.supersedes
+    let targetId = requested
+    if (targetId === undefined) {
+      let entries = []
+      try {
+        entries = await io.listDir(projectDir)
+      } catch {
+        entries = []
+      }
+      const ids = entries
+        .map((entry) => entry.name)
+        .filter((name) => isBatchId(name))
+        .sort((left, right) => compareBatchIds(right, left))
+      if (ids.length === 0)
+        throw handoffError(
+          ERROR.APPEND_TARGET_MISSING,
+          `no previous batch exists for ${args.action}; create the first batch without append/update`
+        )
+      targetId = ids[0]
+    }
+    const targetDir = join(projectDir, targetId)
+    const info = await io.lstat(targetDir)
+    if (info === undefined)
+      throw handoffError(ERROR.APPEND_TARGET_MISSING, `target batch ${targetId} not found under ${projectDir}`)
+    if (targetId === batchId)
+      throw handoffError(ERROR.LINEAGE_CYCLE, 'a batch cannot append to or supersede itself')
+    let targetManifest
+    try {
+      targetManifest = parseManifest(await io.readText(join(targetDir, MANIFEST_FILE)))
+    } catch (error) {
+      throw handoffError(
+        ERROR.APPEND_TARGET_MISSING,
+        `target batch ${targetId} has no readable manifest.json (${errorMessageOf(error)}); refusing to link`
+      )
+    }
+    const previousLineage = isPlainObject(targetManifest.lineage) ? targetManifest.lineage : null
+    const sequence =
+      previousLineage !== null && Number.isInteger(previousLineage.sequence)
+        ? previousLineage.sequence + 1
+        : 2
+    const rootBatchId =
+      previousLineage !== null && typeof previousLineage.root === 'string'
+        ? previousLineage.root
+        : targetId
+    const lineage = { sequence, previous: targetId, root: rootBatchId }
+    if (args.action === 'update') lineage.supersedes = targetId
+    return lineage
+  }
+
+  /** Report lineage problems: broken previous link and superseded batches. */
+  async function checkLineage({ manifest, located, io, findings }) {
+    const lineage = isPlainObject(manifest?.lineage) ? manifest.lineage : null
+    const projectDir = located.projectDir
+    if (lineage !== null && typeof lineage.previous === 'string') {
+      const previousDir = join(projectDir, lineage.previous)
+      let info
+      try {
+        info = await io.lstat(previousDir)
+      } catch {
+        info = undefined
+      }
+      if (info === undefined) {
+        findings.push({
+          severity: 'error',
+          code: 'LINEAGE_BROKEN',
+          path: 'lineage.previous',
+          detail: `previous batch ${lineage.previous} is missing`
+        })
+      } else {
+        try {
+          parseManifest(await io.readText(join(previousDir, MANIFEST_FILE)))
+        } catch {
+          findings.push({
+            severity: 'error',
+            code: 'LINEAGE_BROKEN',
+            path: 'lineage.previous',
+            detail: `previous batch ${lineage.previous} has an unreadable manifest.json`
+          })
+        }
+      }
+    }
+    let entries = []
+    try {
+      entries = await io.listDir(projectDir)
+    } catch {
+      entries = []
+    }
+    const siblings = entries
+      .map((entry) => entry.name)
+      .filter((name) => isBatchId(name))
+      .slice(0, 200)
+    for (const siblingId of siblings) {
+      if (siblingId === located.batchId) continue
+      try {
+        const sibling = parseManifest(await io.readText(join(projectDir, siblingId, MANIFEST_FILE)))
+        if (isPlainObject(sibling.lineage) && sibling.lineage.supersedes === located.batchId) {
+          findings.push({
+            severity: 'warn',
+            code: 'SUPERSEDED_BATCH',
+            path: MANIFEST_FILE,
+            detail: `this batch was superseded by ${siblingId}`
+          })
+          break
+        }
+      } catch {
+        /* unreadable sibling manifests are not this batch's problem */
+      }
+    }
+  }
+
   async function prepareCopies({ args, context, io, files, ledger }) {
     const entries = []
     const warnings = []
@@ -625,7 +847,21 @@ export function createService({
       files: collect.files ?? [],
       ledger
     })
-    const allWarnings = mergeWarnings([...warnings, ...copy.warnings])
+    const changes = await collectChanges({ context, exec, includeDiffs: args.includeDiffs === true })
+    const fuel = await collectFuel({ context, exec })
+    const fuelWarnings = []
+    if (changes.available !== true) {
+      fuelWarnings.push({ code: 'CHANGES_UNAVAILABLE', detail: String(changes.note ?? 'workspaceChanges unavailable') })
+    } else if (changes.truncated === true) {
+      fuelWarnings.push({ code: 'CHANGES_TRUNCATED', detail: String(changes.note ?? 'changed-file list truncated') })
+    }
+    if (fuel.goals.available !== true) {
+      fuelWarnings.push({ code: 'GOAL_UNAVAILABLE', detail: String(fuel.goals.note ?? 'goal unavailable') })
+    }
+    if (fuel.jobs.available !== true) {
+      fuelWarnings.push({ code: 'JOBS_UNAVAILABLE', detail: String(fuel.jobs.note ?? 'jobs unavailable') })
+    }
+    const allWarnings = mergeWarnings([...warnings, ...copy.warnings, ...fuelWarnings])
 
     // Redact every independently sourced string before it can reach an artifact.
     const redactedInputs = redactDeep(inputsRecord(args))
@@ -639,6 +875,14 @@ export function createService({
     const projectDir = join(root, projectInfo.project.key)
     const batchDir = join(projectDir, batchId)
     await assertBatchCreatable({ fs: ctx.fs, rootDir: batchDir, force: args.force })
+    const lineage = await resolveLineage({
+      args,
+      context,
+      io,
+      root,
+      projectKeyName: projectInfo.project.key,
+      batchId
+    })
 
     let manifest = null
     let handoffText = ''
@@ -649,6 +893,7 @@ export function createService({
         batchId,
         createdAt,
         target: args.target,
+        schemaVersion: SCHEMA_VERSION_V2,
         generator: generatorIdentity({ dshVersion, platform }),
         project: projectInfo.project,
         session: sessionRecord(context),
@@ -660,7 +905,10 @@ export function createService({
         redactions: ledger.list(),
         warnings: allWarnings,
         limits: publicLimits(),
-        scan: scanRecord(collect)
+        scan: scanRecord(collect),
+        changes,
+        fuel,
+        ...(lineage !== undefined ? { lineage } : {})
       })
       const handoff = redactText(renderHandoff(manifest))
       ledger.add(HANDOFF_FILE, handoff.hits)
@@ -709,8 +957,16 @@ export function createService({
       0
     )
     const dirToken = tokenizePath(batchDir, context.contexts)
+    const changesSummary = {
+      available: changes.available === true,
+      ...(typeof changes.source === 'string' ? { source: changes.source } : {}),
+      ...(Number.isInteger(changes.turn) ? { turn: changes.turn } : {}),
+      ...(isPlainObject(changes.totals) ? { totals: changes.totals } : {}),
+      ...(changes.truncated === true ? { truncated: true } : {}),
+      ...(typeof changes.note === 'string' ? { note: changes.note } : {})
+    }
     return finish({
-      action: 'create',
+      action: args.action,
       dir: dirToken,
       displayDir: await displayOf(batchDir),
       project: projectInfo.project,
@@ -727,7 +983,16 @@ export function createService({
       }),
       redactions: ledger.list(),
       warnings: allWarnings,
-      next: [`read ${dirToken}/HANDOFF.md`, `handoff_pack action=verify batchId=${batchId}`],
+      changes: changesSummary,
+      ...(lineage !== undefined ? { lineage } : {}),
+      next:
+        args.action === 'create'
+          ? [`read ${dirToken}/HANDOFF.md`, `handoff_pack action=verify batchId=${batchId}`]
+          : [
+              `read ${dirToken}/HANDOFF.md (lineage sequence ${lineage.sequence}, previous ${lineage.previous})`,
+              `handoff_load batchId=${batchId}`,
+              `handoff_pack action=verify batchId=${batchId}`
+            ],
       limits: publicLimits()
     })
   }
@@ -989,6 +1254,7 @@ export function createService({
         })
       }
       artifactsChecked = await checkArtifacts({ manifest, batchDir: located.dir, io, findings })
+      await checkLineage({ manifest, located, io, findings })
       drift = await checkDrift({ manifest, context, io, findings, artifactsChecked })
     }
     const sorted = sortFindings(findings)
@@ -1337,6 +1603,8 @@ export function createService({
       case 'scan':
         return runScan(args, exec)
       case 'create':
+      case 'append':
+      case 'update':
         return runCreate(args, exec)
       case 'verify':
         return runVerify(args, exec)

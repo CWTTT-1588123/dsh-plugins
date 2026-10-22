@@ -21,7 +21,7 @@ import {
 /** Input hint shown by the slash-command palette. */
 export const COMMAND_DESCRIPTION = '生成/校验/消费会话交接包（HANDOFF.md + manifest.json）'
 export const COMMAND_HINT =
-  '[create|scan|verify|list|resume] [--target user|workspace] [--title TEXT] [--batch ID] [--force] [--include summary|sections|full] [--no-verify]'
+  '[create|append|update|scan|verify|list|resume] [--target user|workspace] [--title TEXT] [--batch ID] [--previous ID] [--supersedes ID] [--force] [--include-diffs] [--include summary|sections|full] [--no-verify]'
 
 /** Command-only actions on top of the tool actions. */
 const COMMAND_ACTIONS = [...ACTIONS, 'resume']
@@ -37,13 +37,16 @@ const VALUED_FLAGS = new Map([
   ['--target', 'target'],
   ['--title', 'title'],
   ['--batch', 'batchId'],
-  ['--include', 'include']
+  ['--include', 'include'],
+  ['--previous', 'previousBatchId'],
+  ['--supersedes', 'supersedes']
 ])
 /** Boolean flags. */
 const FLAGS = new Map([
   ['--force', 'force'],
   ['--all', 'all'],
   ['--copy-files', 'copyFiles'],
+  ['--include-diffs', 'includeDiffs'],
   ['--no-verify', 'noVerify']
 ])
 
@@ -121,17 +124,32 @@ export function formatResult(result) {
         `下一步：/handoff create --title "..." 生成正式批次。`
       )
     }
-    case 'create': {
+    case 'create':
+    case 'append':
+    case 'update': {
       const handoff = Array.isArray(result.artifacts)
         ? result.artifacts.find((artifact) => artifact.path === 'HANDOFF.md')
         : undefined
       const hash = handoff?.sha256 === undefined ? '' : `HANDOFF.md sha256 ${handoff.sha256.slice(0, 12)}… · `
+      const lineage =
+        result.lineage === undefined
+          ? ''
+          : `血缘：第 ${result.lineage.sequence} 代，承接 ${result.lineage.previous}` +
+            (result.lineage.supersedes === undefined ? '' : `（替代 ${result.lineage.supersedes}）`) +
+            '。\n'
+      const changes =
+        result.changes === undefined
+          ? ''
+          : `本会话改动（已完成 turn）：${result.changes.totals?.files ?? 0} 个文件 ` +
+            `(+${result.changes.totals?.added ?? 0} / −${result.changes.totals?.deleted ?? 0})` +
+            `${result.changes.available === true ? '' : '（不可用，见 warnings）'}。\n`
       return (
-        `交接包已生成：${result.displayDir ?? result.dir}\n` +
+        `${result.action === 'create' ? '交接包已生成' : result.action === 'append' ? '交接包已追加（append）' : '交接包已更新（update，supersede）'}：${result.displayDir ?? result.dir}\n` +
+        lineage +
+        changes +
         `${hash}${result.artifacts?.length ?? 0} 个产物 / ${result.totals?.artifactBytes ?? 0} 字节，` +
         `${warnings} 个 warning。\n` +
-        `下一步：新会话先运行 handoff_pack action=verify batchId=${result.batchId}，再读 HANDOFF.md。\n` +
-        `提示：${result.next?.[0] ?? 'read HANDOFF.md'}`
+        `下一步：新会话先运行 handoff_load batchId=${result.batchId}，再读 HANDOFF.md。`
       )
     }
     case 'verify': {
@@ -170,6 +188,8 @@ const REMEDIES = {
   [ERROR.BATCH_EXISTS]: '该批次已存在：换一个批次（重跑 create）或加 --force 覆盖。',
   [ERROR.BATCH_NOT_FOUND]: '找不到批次：先 /handoff list 查看 batchId，再 /handoff verify <batchId>。',
   [ERROR.RESUME_NOT_FOUND]: '找不到可加载的批次：先 /handoff list（或 handoff_pack action=list）确认 batchId/target；必要时先 create。',
+  [ERROR.APPEND_TARGET_MISSING]: 'append/update 的目标批次不存在或不可读：先 /handoff list 确认，或先 create 第一版；可用 --previous/--supersedes 显式指定。',
+  [ERROR.LINEAGE_CYCLE]: '血缘目标非法（批次不能 append/update 到自身或形成环）：换一个目标批次。',
   [ERROR.MANIFEST_MISSING]: '批次缺少 manifest.json（不完整）：不要采信；可重跑 create --force。',
   [ERROR.MANIFEST_INVALID]: 'manifest.json 无法解析/校验：批次已损坏，不要采信；重新生成。',
   [ERROR.SECRET_CHECK_FAILED]: '终检发现密钥残留：整批已放弃写入，请缩小 files 范围或先清理敏感内容。',
