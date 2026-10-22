@@ -1,0 +1,85 @@
+# dsh-plugins 文档索引（唯一入口）
+
+<!-- docs-meta: status=current; phase=cross; verified=dda8796@2026-10-22; tracks=-; supersedes=-; superseded-by=- -->
+
+> 状态：**current**（2026-10-22 建立，D1）
+> 读者：用户 + 所有 AI 会话
+> 规则来源：[ADR-0002 文档治理](adr/0002-document-governance.md)；检查规格：[DOC_CHECKS](DOC_CHECKS.md)。
+> 本文件是**唯一文档索引**：仓库内所有 Markdown 必须在此登记；新会话入口固定为 `ROADMAP → 本索引 → 当前阶段 plan`。
+> 维护：新增/归档文档必须同步本表；D3 起由 `docs:check` 强制校验。
+
+## 1. 权威顺序（冲突时从高到低）
+
+1. **运行事实**：代码、测试、实测输出；
+2. **ADR**（决策，只增不改）；
+3. **ROADMAP**（阶段与状态唯一权威）；
+4. **本索引 + current 类文档**（当前描述）；
+5. **冻结文档**（历史记录，只读；不得作为现状依据）；
+6. **historical 文档**（仅背景，已移出读路径）。
+
+## 2. 状态图例
+
+| 状态 | 含义 | 可改正文？ |
+|---|---|---|
+| `current` | 当前有效的描述/规格/索引 | ✅ 允许（更新后刷新 verified） |
+| `frozen` | 已完成阶段的计划/验收/ADR，或已接受决策 | ❌ 只允许追加勘误章节 |
+| `superseded` | 已被新文档取代 | ❌ |
+| `historical` | 历史背景材料，已归档 | ❌ |
+
+## 3. 文档头模板（复制到每份 Markdown 标题后）
+
+```html
+<!-- docs-meta: status=current; phase=P2; verified=dda8796@2026-10-22; tracks=plugins/dsh-handoff-kit/src,docs; supersedes=-; superseded-by=- -->
+```
+
+- `current`/`frozen` 必须带 `verified`；`superseded`/`historical` 必须有 `superseded-by` 或位于 `docs/archive/`；
+- 纯协调文档 `tracks=-`；`verified` 是最后一次对照代码/测试核对的提交与日期。
+
+## 4. 文档总表
+
+| 文档 | 类型 | 状态 | 阶段 | 负责范围 / 备注 |
+|---|---|---|---|---|
+| [ROADMAP](../ROADMAP.md) | 当前真相 | current | P0–P3 | 阶段与状态唯一权威（D3 修 C5：测试数字/新需求待 D4 修订） |
+| [CHANGELOG](../CHANGELOG.md) | 记录 | current | 全 | 版本变更（D3 加 meta） |
+| [README](../README.md) | 当前真相 | current | 全 | 仓库说明/安装（D3 修 C1：插件表停在 P0） |
+| [WORKSTREAMS](WORKSTREAMS.md) | 当前真相 | current | cross | 三线任务协调与执行顺序 |
+| [本索引](README.md) | 当前真相 | current | cross | 唯一文档入口 |
+| [DOC_CHECKS](DOC_CHECKS.md) | 规格 | current | cross | `docs:check` 检查清单（D2 实现脚本） |
+| [ADR-0001 仓库拆分与 P0 决策](adr/0001-handoff-kit-repo-and-decisions.md) | 决策 | frozen | P0 | 仓库拆分与 P0 关键决策 20 条（D3 加 meta） |
+| [ADR-0002 文档治理](adr/0002-document-governance.md) | 决策 | frozen | cross | 四类文档/冻结归档/两层检查 |
+| [P0 实施计划](handoff-kit/design/P0_implementation_plan.md) | 计划 | frozen | P0 | P0 实施基线（标题"现行权威"待 D3 改为历史基线） |
+| [P0 模块接口](handoff-kit/design/P0_module_interfaces.md) | 规格 | frozen | P0 | P0 模块级接口规格（D3 加 meta） |
+| [P1 实施计划](handoff-kit/design/P1_plan.md) | 计划 | frozen | P1 | P1 实施基线（头部"下一步 = M1"待 D3 改为已完成） |
+| [旧设计索引](handoff-kit/design/README.md) | 索引（旧） | superseded | — | 被本索引取代；D3 改为指向本文件 |
+| [通用交接包生成器 v1](handoff-kit/design/20261022_通用交接包生成器_v1.md) | 方法论 | historical | — | 用户原意 + H0–H9 方法论（D3 归档，内容仍有效） |
+| [P0 实施说明（历史草案）](handoff-kit/design/20261022_dsh-handoff-kit_P0实施说明.md) | 历史 | historical | P0 | 初版形态草案（D3 归档） |
+| [创造模式会话启动提示词（历史）](handoff-kit/design/20261022_创造模式会话启动提示词.md) | 历史 | historical | P0 | 首次会话入口（D3 归档） |
+| [START_PROMPT（P0）](handoff-kit/START_PROMPT.md) | 历史 | historical | P0 | P0 启动词；新会话入口由 D4 的 `START_PROMPT_P2.md` 接替（D3 归档/标记） |
+| [GAPS 挂账台账](handoff-kit/GAPS.md) | 记录 | current | P0–P1 | 缺口分类与归档记录（追加式更新） |
+| [P0 验收记录](handoff-kit/acceptance/P0.md) | 验收 | frozen | P0 | P0 L1–L3 证据（D3 加 meta；批次引用已归档见 GAPS §2） |
+| [P1 验收记录](handoff-kit/acceptance/P1.md) | 验收 | frozen | P1 | P1 M1–M3 + 0.2.1 清理证据（D3 加 meta） |
+| [插件 README](../plugins/dsh-handoff-kit/README.md) | 产品文档 | current | 0.2.1 | 插件使用/安装/开发说明 |
+| [handoff-pack 技能](../plugins/dsh-handoff-kit/skills/handoff-pack/SKILL.md) | 技能 | current | 0.2.1 | 模型使用交接包的流程说明 |
+
+## 5. 计划新增（尚未创建，D2/D4/D5）
+
+| 计划文档 | 状态 | 产出步骤 |
+|---|---|---|
+| `scripts/docs-check.mjs`（+ 首次检查报告） | 待建 | D2 |
+| `docs/adr/0003-prompt-first-and-ui.md` | 待建 | D4（新需求决策：prompt-first + package-backed + UI 工作台） |
+| `docs/handoff-kit/design/P2_plan.md` | 待建 | D4（P2 重排后计划：UI 工作台首块） |
+| `docs/handoff-kit/START_PROMPT_P2.md` | 待建 | D4（新会话入口，取代 P0 启动词） |
+
+## 6. 归档规则
+
+- 目录：`docs/archive/<插件>/`；文件首行 `docs-meta` 标 `status=historical`，并写 `superseded-by`；
+- 归档不是删除：git 历史与目录都保留；索引中只以 historical 形式登记；
+- 归档后不得再从 `design/` 等主路径引用为"现行"。
+
+## 7. 新会话读取协议
+
+1. 读 [ROADMAP](../ROADMAP.md)（阶段/状态）；
+2. 读本索引（当前文档与状态）；
+3. 读当前阶段 plan（current）；
+4. 其余文档只在明确需要时读：`frozen` 只作历史，`historical` 仅背景；
+5. 引用任何文档结论前，看其 `verified` 是否还能对上当前代码；对不上→按 `stale` 处理并报告。
