@@ -1,6 +1,6 @@
 # docs:check 检查清单（规格）
 
-<!-- docs-meta: status=current; phase=cross; verified=dda8796@2026-10-22; tracks=scripts/docs-check.mjs; supersedes=-; superseded-by=- -->
+<!-- docs-meta: status=current; phase=cross; verified=633fe99@2026-10-22; tracks=scripts/docs-check.mjs; supersedes=-; superseded-by=- -->
 
 > 状态：**current**（D1 规格；D2 实现脚本）
 > 依据：[ADR-0002 文档治理](adr/0002-document-governance.md) §D5
