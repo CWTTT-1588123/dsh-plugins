@@ -39,6 +39,10 @@ P0 证据缺口（如实标注）：没有 `git status`（禁子进程）、没�
 3. 对 H4 抽查至少 3 条哈希：PowerShell `Get-FileHash <path> -Algorithm SHA256` 或 `sha256sum <path>`，与 manifest/HANDOFF 记录比对；
 4. 汇报漂移：断言 / 期望值 / 实际值 / 结论（可信 / 已漂移 / 待验）。
 
+> Windows/PowerShell 读 `manifest.json` / `HANDOFF.md` 时请**显式 UTF-8**：
+> `[System.IO.File]::ReadAllText($path, [System.Text.Encoding]::UTF8)` 或 `Get-Content -Raw -Encoding utf8`。
+> 否则中文会被按 ANSI 解码、`ConvertFrom-Json` 解析失败（实测踩坑：同一批次纯读取出现乱码/解析错误，改用显式 UTF-8 后正常）。
+
 ## 边界
 
 - 不编造：缺失输入写"未提供，待补"，不确定写 `[待验]`；

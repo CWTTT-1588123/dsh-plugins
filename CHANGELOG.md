@@ -40,6 +40,9 @@ P0「手动生成 + 校验闭环」完成。验收证据见
 - `generic-assignment` 脱敏规则收紧：裸 `key`/`keys`、点分命名空间 `project.key`、普通 prose
   （如 `target=user …`、`project-key = basename(...)`）不再误报；`env-assignment` 仅匹配大写环境变量名。
   复合密钥名（`api_key`/`privateKey`/…）与真实密钥仍命中。
+- `handoff-pack` 技能补充消费提示：Windows/PowerShell 读取 `manifest.json` / `HANDOFF.md` 时需显式 UTF-8
+  （`[System.IO.File]::ReadAllText(..., UTF8)` 或 `Get-Content -Encoding utf8`），避免默认 ANSI 解码导致
+  中文乱码与 JSON 解析失败（新会话消费实测踩坑，技能 provider 逐次读文件，修改即时生效）。
 
 ### Fixed
 
