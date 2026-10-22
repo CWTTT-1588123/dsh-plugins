@@ -17,6 +17,8 @@
     "index.js",
     "client.js",
     "src",
+    "spec",
+    "schema",
     "skills",
     "locale/*.json",
     "icon.svg",

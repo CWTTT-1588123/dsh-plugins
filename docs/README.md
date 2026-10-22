@@ -1,6 +1,6 @@
 # dsh-plugins 文档索引（唯一入口）
 
-<!-- docs-meta: status=current; phase=cross; verified=0a2cbc9@2026-10-23; tracks=-; supersedes=-; superseded-by=- -->
+<!-- docs-meta: status=current; phase=cross; verified=a57385a@2026-10-23; tracks=-; supersedes=-; superseded-by=- -->
 
 > 状态：**current**（2026-10-22 建立，D1）
 > 读者：用户 + 所有 AI 会话
@@ -65,6 +65,8 @@
 | [P2 验收记录](handoff-kit/acceptance/P2.md) | 验收 | frozen | P2 | P2 U0–U4/L1–L3 浏览器实测证据、已知缺口（0.3.0；§9 为 0.3.1 提示词安全勘误） |
 | [插件 README](../plugins/dsh-handoff-kit/README.md) | 产品文档 | current | 0.3.1 | 插件使用/安装/开发说明（含 P2 UI 工作台与提示词安全门） |
 | [插件使用说明（标准交接流程）](../plugins/dsh-handoff-kit/USAGE.md) | 使用说明 | current | 0.3.1 | 旧会话生成 → 新会话只粘贴 → 旁证只读复核 → 明确指令后开工（四步） |
+| [交接包格式规范（英文）](../plugins/dsh-handoff-kit/spec/HANDOFF.md) | 规格 | current | P3 | 1.0 交接包格式规范：批次布局/manifest@1/2/HANDOFF 结构/证据标签/trust 语义（M1） |
+| [交接包验证规范（英文）](../plugins/dsh-handoff-kit/spec/verify.md) | 规格 | current | P3 | 1.0 验证算法：步骤/finding 码/trust 判定/CLI 退出码（M1） |
 | [handoff-pack 技能](../plugins/dsh-handoff-kit/skills/handoff-pack/SKILL.md) | 技能 | current | 0.3.1 | 模型使用交接包的流程说明（P2 UI 不改变模型消费路径） |
 
 ## 5. 已建与计划新增
@@ -77,6 +79,8 @@
 | `docs/handoff-kit/START_PROMPT_P2.md` | 已建 | D4 |
 | `docs/handoff-kit/acceptance/P2.md` | 已建 | D5 / U4 |
 | `docs/handoff-kit/design/P3_plan.md` | 已建 | M0（2026-10-23 批准） |
+| `plugins/dsh-handoff-kit/spec/HANDOFF.md` + `spec/verify.md` | 已建 | P3/M1（规范公开，2026-10-23） |
+| `plugins/dsh-handoff-kit/schema/manifest.v1.json` + `manifest.v2.json` | 已建 | P3/M1（JSON Schema，2026-10-23） |
 
 D5（P2 实现）已完成；P3 设计文档已建（`P3_plan.md`，2026-10-23 开工），无需其他待建文档。
 
