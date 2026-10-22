@@ -30,9 +30,11 @@
 **DoD**：L1–L3 全过（见实施计划第 9 节）+ 新会话仅凭 `HANDOFF.md` + `manifest.json`
 能回答“上次做到哪、下一步、要复核哪几条”。
 
-**验收结论**（2026-10-22）：L1 全过；L2 边界 B1–B8 全过；L3 的 danger-full-access、
-回滚演练、DSH 源码零改动通过，read-only/workspace-write 真实链路因需切换会话权限
-**未实测**（fake 策略单测覆盖，缺口 G5 已挂账）。详见
+**验收结论**（2026-10-22）：L1 全过；L2 边界 B1–B9 全过；L3 全过——danger-full-access、
+workspace-write + `target=workspace`、`read-only` / `workspace-write` 拒绝路径、回滚演练、
+DSH 源码零改动均已用**真实权限会话**实测（`session-95c9d28f…`，`/handoff list` 命令亦实测），
+fake 策略单测为补充而非替代。剩下的只是 P0 设计边界（无 git status / 无 mtime / 无删除原语等，
+见验收记录 G1–G4），不再有"可测未测"挂账。详见
 [P0 验收记录](docs/handoff-kit/acceptance/P0.md)。
 
 **交付物**：`plugins/dsh-handoff-kit/`、`docs/handoff-kit/acceptance/P0.md`、CHANGELOG 0.1.0。
