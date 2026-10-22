@@ -24,11 +24,11 @@
 | **DC3** | error | 元数据存在/格式 | 扫描集合中每份非归档 `.md` 标题后必须有 `<!-- docs-meta: ... -->`，字段齐全且枚举合法；`current`/`frozen` 必须有 `verified=<commit>@<date>`；`superseded`/`historical` 必须有 `superseded-by` 或位于 archive | 按索引 §3 模板补齐；冻结文档只补头不改正文 |
 | **DC4** | error | 状态一致性 | 索引总表登记的 status 必须与文件 `docs-meta.status` 一致；索引不得把 `docs/archive/**` 文件登记为 current/frozen | 同步索引与文档头 |
 | **DC5** | error | 链接有效性 | 文档内所有相对 Markdown 链接（`](path)`）必须解析到存在的文件；忽略 `#anchor`、`http(s)://`、`mailto:`、代码块/行内代码中的示例 | 修正或删除失效链接；归档引用改为 archive 路径 |
-| **DC6a** | error | 新鲜度基线 | `status=current` 或 `frozen` 且 `tracks != -` 的文档，其 `verified` 中的 commit 必须存在于 git 历史 | 更新 `verified` 为真实核对过的 commit |
-| **DC6b** | warn | 新鲜度漂移 | `git diff --name-only <verified-commit>..HEAD -- <tracks>` 非空 → 文档标 **stale**（不自动改 status） | 重核对内容后刷新 `verified`，或降级为 frozen/historical |
+| **DC6a** | error | 新鲜度基线 | `status=current` 或 `frozen` 的文档，其 `verified` 中的 commit 必须存在于 git 历史 | 更新 `verified` 为真实核对过的 commit |
+| **DC6b** | warn | 新鲜度漂移 | 仅 `status=current` 且 `tracks != -` 的文档：`git diff --name-only <verified-commit>..HEAD -- <tracks>` 非空 → 标 **stale**（不自动改 status）；frozen 文档只做 DC6a，不做漂移判定（历史记录本就会落后于代码） | 重核对内容后刷新 `verified`，或降级为 frozen/historical |
 | **DC6c** | warn | 元数据滞后 | 文档文件本身在 `verified` 日期之后有提交，但 `verified` 未更新 | 确认内容仍有效后刷新 `verified` |
 | **DC7a** | warn | 派生事实：版本 | 根/插件 `package.json` 的 version 未以 `## [x.y.z]` 形式出现在 `CHANGELOG.md` | 补 CHANGELOG 或修正文档 |
-| **DC7b** | warn | 派生事实：测试数 | 文档中手写 `\d+/ ?\d+` 且邻近"测试/单测/tests"（视为权威数字） | 改为"以测试输出为准"或注明命令+日期 |
+| **DC7b** | warn | 派生事实：测试数 | 仅 `status=current` 文档中手写 `\d+/ ?\d+` 且邻近"测试/单测/tests"（视为权威数字）；frozen 验收记录里的历史数字允许保留（它们自带日期/上下文） | 改为"以测试输出为准"或注明命令+日期 |
 | **DC8** | error | 归档隔离 | `docs/archive/**` 下每个 `.md` 的 `docs-meta.status` 必须为 `historical`；索引不得将其登记为 current/frozen | 修正状态头或索引条目 |
 | **DC9** | warn | current 过期 | `status=current` 且 `verified` 日期早于 90 天前 | 阶段收尾重核对或降级 |
 | **DC10** | error | 索引结构 | `docs/README.md` 必须包含：权威顺序、状态图例、文档头模板、文档总表四个章节（标题匹配） | 恢复章节 |

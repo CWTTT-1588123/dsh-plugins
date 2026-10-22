@@ -24,7 +24,7 @@
 |---|---|---|---|
 | **A 原定路线** | P0–P3 阶段规划与验收 | P0 done（0.1.0）；P1 done（0.2.0 + 0.2.1 清理）；P2/P3 未开始 | [ROADMAP](../ROADMAP.md)、各阶段 plan/acceptance |
 | **B 新需求（prompt-first + UI）** | 可用性：对话/工作台界面，把"对接提示词"变成第一公民 | **已对齐，未落文档、未开工** | 待建 `ADR-0003` + `P2_plan.md`；原意见 [v1 文档](handoff-kit/design/20261022_通用交接包生成器_v1.md) |
-| **C 文档治理** | 四类文档 + 冻结归档 + `docs:check` 漂移检测 | **D1 骨架已建**（ADR-0002 + 索引 + 检查清单）；D2 脚本待做 | [ADR-0002](adr/0002-document-governance.md) + [docs/README](README.md)；脚本待建 |
+| **C 文档治理** | 四类文档 + 冻结归档 + `docs:check` 漂移检测 | **D1/D2 已建**（骨架 + 脚本 + 首份报告）；D3 待修 | [ADR-0002](adr/0002-document-governance.md) + [索引](README.md) + [scripts/docs-check.mjs](../scripts/docs-check.mjs) |
 
 ## 2. 线 A：原定整体路线（不变的部分）
 
@@ -105,7 +105,7 @@ AI 编程文档三种偏移：**时间**（描述旧状态）、**位置**（旧
 | 步骤 | 内容 | 产出 | 状态 |
 |---|---|---|---|
 | **D1 治理骨架** | 治理约定 + 唯一索引 + 检查清单（只写文档，不动旧正文、不写代码） | [ADR-0002](adr/0002-document-governance.md)、[docs/README](README.md)、[docs/DOC_CHECKS](DOC_CHECKS.md) | **done**（2026-10-22） |
-| **D2 检查脚本** | 按清单实现零依赖 `scripts/docs-check.mjs` 并跑通 | 脚本 + 首次检查报告 | 待开工 |
+| **D2 检查脚本** | 按清单实现零依赖 `scripts/docs-check.mjs` 并跑通 | [scripts/docs-check.mjs](../scripts/docs-check.mjs) + 首份检查报告（23 error / 0 warn / 0 stale） | **done**（2026-10-22） |
 | **D3 落地冻结归档** | 给现有 17 份文档加状态头；历史文档移入 `docs/archive/`；修 C1–C7 | 索引全绿、`docs:check` 无 error | 待开工 |
 | **D4 路线整合** | 新需求落文档：`ADR-0003`（prompt-first + UI）+ ROADMAP 修订记录 + `P2_plan.md` + `START_PROMPT_P2.md` | 新路线正式生效 | 待开工 |
 | **D5 UI 实现** | Client half + 宿主 RPC + 工作台/输入框入口（另行详细计划） | UI v1 + 浏览器实测 | 待开工 |
@@ -123,11 +123,10 @@ AI 编程文档三种偏移：**时间**（描述旧状态）、**位置**（旧
 
 ## 7. 立即下一步
 
-**D2**：按 [DOC_CHECKS](DOC_CHECKS.md) 实现零依赖 `scripts/docs-check.mjs`（Node ESM），在当前文档集上跑出首份检查报告；预期暴露 D3 待修项（缺元数据、索引未登记、链接/派生事实、C1–C7）。不自动修改任何文档。
-
-D2 完成后进入 **D3**：按报告给现有 17 份文档补状态头、归档历史文档、修正 C1–C7，直到 `docs:check` 无 error。
+**D3**：按 D2 首份报告修复——(1) 给 17 份旧文档补 `docs-meta` 状态头（current/frozen/historical 按分类）；(2) 修 GAPS.md 3 处、START_PROMPT.md 3 处失效链接（START_PROMPT 将归档，归档后不再检查其正文）；(3) 归档 3 份历史文档 + 旧索引 + START_PROMPT 到 `docs/archive/handoff-kit/`；(4) 修 C1–C7（根 README 插件表/入口/目录树、design/README 指向新索引、P0/P1 计划状态横幅、ROADMAP 派生事实）。目标：`docs:check` 0 error（warning 允许，D3 后另行清理）。
 
 ## 8. 变更记录
 
 - 2026-10-22 创建：三线对齐成文（A 原路线 / B 新需求 / C 文档治理），确定执行顺序 D1→D5。
 - 2026-10-22 D1 完成：[ADR-0002](adr/0002-document-governance.md) 治理决策、[docs/README](README.md) 唯一索引、[docs/DOC_CHECKS](DOC_CHECKS.md) 检查清单；下一为 D2 脚本。
+- 2026-10-22 D2 完成：[scripts/docs-check.mjs](../scripts/docs-check.mjs)（零依赖，DC1–DC10）；首份报告 21 份文档 / 23 error（17 缺元数据 + 6 失效链接）/ 0 warning / 0 stale——全部为 D3 预期待修项；`frozen` 验收记录的历史测试数字改为豁免（DC7b 仅 current）。
