@@ -1,0 +1,55 @@
+name: Bug report
+description: Report a reproducible problem with dsh-handoff-kit (tools, CLI, UI, or the package format)
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. **Do not paste secrets, tokens, or handoff package
+        contents that may contain private workspace data.** Replace paths with
+        placeholders like `$WORKSPACE/...` when possible.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, and what actually happened?
+      placeholder: |
+        1. Ran `handoff_pack action=create ...`
+        2. Expected ...
+        3. Got ...
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction steps
+      description: Minimal, deterministic steps; include the exact command or tool call.
+      render: text
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: Plugin version, DSH version, Node version, OS.
+      placeholder: "dsh-handoff-kit 1.0.0-rc.1 · DSH 0.2.1-rc.2 · Node 24 · Windows 11"
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence (optional)
+      description: Relevant error text, `handoff_pack action=verify` findings, or CI log excerpt. Never include tokens.
+      render: text
+    validations:
+      required: false
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      options:
+        - label: I searched existing issues and the docs (README / spec / GAPS).
+          required: true
+        - label: This report contains no secrets, tokens, or private workspace data.
+          required: true

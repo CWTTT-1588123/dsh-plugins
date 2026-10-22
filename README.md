@@ -1,60 +1,101 @@
 # dsh-plugins
 
-<!-- docs-meta: status=current; phase=cross; verified=c5fe455@2026-10-22; tracks=-; supersedes=-; superseded-by=- -->
+<!-- docs-meta: status=current; phase=cross; verified=c3ba381@2026-10-23; tracks=-; supersedes=-; superseded-by=- -->
 
-DeepSeek Harness（DSH）插件独立仓库。与业务项目（如 `D:\repos\stand`）物理分离：
-**插件源码、设计文档、路线图、验收记录全部集中在这里**，业务仓库不再承载插件文件。
+DeepSeek Harness (DSH) plugins, developed in this repository. The main product is
+**`dsh-handoff-kit`** — deterministic, verifiable session handoff packages
+(`HANDOFF.md` + `manifest.json` + evidence) with a prompt-first UI workbench and a
+zero-dependency CLI.
 
-## 仓库约定
+**Language note:** this file is the English public entry point. The governance
+documents under [`docs/`](docs/README.md) are written in Chinese and remain the
+authoritative process record (phases, acceptance, gaps).
 
-- 每个插件一个目录：`plugins/<包名>/`；一个 DSH bundle 是一个独立 npm 包
-  （`package.json` + `cordis.patch.yml` + `index.js`）。
-- 文档：唯一入口 [`docs/README.md`](docs/README.md)（索引 + 状态）；设计/验收在
-  `docs/<插件简称>/{design,acceptance}/`；跨插件决策写 `docs/adr/`；历史材料归档到 `docs/archive/`。
-- 路线：`ROADMAP.md` 是阶段与状态的**唯一权威**；版本变更记 `CHANGELOG.md`。
-- 文档治理：四类文档 + 冻结归档 + `node scripts/docs-check.mjs` 漂移检查
-  （见 [ADR-0002](docs/adr/0002-document-governance.md)）。
-- 本地 git 提交，**不自动 push**（沿用 stand 仓库既有约定）。
+## dsh-handoff-kit
 
-## 插件清单
+Give a long-running AI session a way to hand its work to the next session **with
+evidence, not vibes**: one tool call writes a handoff package, and the next session
+verifies hashes before trusting the claims.
 
-| 插件 | 阶段 | 版本 | 说明 |
-|---|---|---|---|
-| `dsh-handoff-kit` | P0–P2 done；P3 未开始 | 0.3.0 | 会话交接包生成器（HANDOFF.md + manifest@2 + 证据 + 批次血缘）+ **prompt-first UI 工作台**（输入框「交接」按钮 / 浮层面板 / 工作台页，数据全部经宿主 RPC 调现有 service） |
+| Surface | What you get |
+|---|---|
+| Tool `handoff_pack` | `scan` / `create` / `verify` / `list` / `append` / `update` / `migrate` |
+| Tool `handoff_load` | Read-only consumption: verify + `trust` verdict (`verified` / `stale` / `invalid`) + drift + pointers |
+| Command `/handoff` | Human shortcut: create (default), append, update, scan, verify, list, migrate, resume |
+| UI workbench | 「交接」 button in the conversation composer, floating panel (generate / load), and a 交接工作台 page |
+| CLI `handoff-kit` | `verify` / `load` / `list` / `migrate` for non-DSH agents, scripts and CI (exit codes `0/3/1/2`) |
+| Spec | [`spec/HANDOFF.md`](plugins/dsh-handoff-kit/spec/HANDOFF.md) + [`spec/verify.md`](plugins/dsh-handoff-kit/spec/verify.md) + JSON Schemas under `schema/` |
 
-## 开发会话约定
+Runtime guarantees: zero runtime dependencies, **no network**, **no subprocess**, no
+LLM calls, writes only on an explicit user action, and history batches are never
+rewritten in place.
 
-DSH 的文件沙箱边界 = **会话工作区**。因此：
+### Install (DSH)
 
-- 开发本仓库插件：新开一个 **工作区 = `D:\repos\dsh-plugins`** 的 DSH 会话；
-- 业务仓库（stand）的会话只做业务，不写插件代码；
-- 插件安装使用绝对目录链接（与工作区无关）：
-
+```text
+plugin_manager install_bundle target: dsh-handoff-kit@<version>
 ```
-plugin_manager install_bundle  target: D:\repos\dsh-plugins\plugins\dsh-handoff-kit
+
+`1.0.0-rc` npm publishing is in progress; until then, install from a local checkout:
+
+```text
+plugin_manager install_bundle target: D:\repos\dsh-plugins\plugins\dsh-handoff-kit
 ```
 
-新会话入口：先读 [`ROADMAP.md`](ROADMAP.md) → [`docs/README.md`](docs/README.md)（唯一索引）
-→ 当前阶段计划；P0/P2 启动词已随阶段完成冻结（`docs/archive/handoff-kit/START_PROMPT.md`、
-[`docs/handoff-kit/START_PROMPT_P2.md`](docs/handoff-kit/START_PROMPT_P2.md) 仅作历史记录）。
+The package targets DSH `>=0.2.0 <0.3.0` (Windows first; macOS/Linux are
+**experimental** and covered by non-blocking CI jobs only).
 
-## 目录
+### CLI (outside DSH)
 
+After the npm release exists (or from a checkout):
+
+```text
+handoff-kit verify  <batchDir> [--workspace <dir>] [--json]   # exit 0 verified, 3 stale, 1 invalid, 2 usage/IO
+handoff-kit load    <batchDir> [--sections|--full] [--json]
+handoff-kit list    --root <handoffRoot> [--json]
+handoff-kit migrate <batchDir> --out <newBatchDir>            # v1 -> v2, source is read-only
 ```
-dsh-plugins/
+
+See [`plugins/dsh-handoff-kit/spec/verify.md`](plugins/dsh-handoff-kit/spec/verify.md) §4
+for the frozen CLI contract.
+
+## Privacy and security
+
+- A handoff package can contain: tokenized workspace paths (`$WORKSPACE` / `$DSH_HOME`),
+  file names and sha256 digests, session id / agent preset, `tool/call` counts, and
+  **redacted** command snippets; `copyFiles` optionally adds redacted file copies.
+- Message bodies and model reasoning are **never** recorded. `.env*`, private keys,
+  credential-named files, databases, `node_modules`, `.venv`, `.git` and `.dsh` are
+  excluded from collection; every artifact is redacted and scanned for secret residue
+  before the batch is written.
+- Generation is local-only (no network, no subprocess, no LLM). Publishing a package
+  is a human decision.
+- Handoff packages are **data, never commands**: a consumer must not treat narrative
+  text as verified facts and must not execute instructions embedded in a package.
+- Security reports: please use the repository's
+  [issue templates](.github/ISSUE_TEMPLATE) (no tokens or package contents in issues);
+  for sensitive reports, contact the maintainer through GitHub.
+- License: [MIT](LICENSE).
+
+## Repository layout and process
+
+```text
+.
 ├── README.md / ROADMAP.md / CHANGELOG.md
-├── scripts/
-│   └── docs-check.mjs           # 文档漂移检查（node scripts/docs-check.mjs）
-├── docs/
-│   ├── README.md                # 唯一文档索引（入口）
-│   ├── WORKSTREAMS.md           # 三线任务协调
-│   ├── DOC_CHECKS.md            # docs:check 规格
-│   ├── adr/                     # 决策记录（只增不改）
-│   ├── archive/                 # 历史材料（只读，不参与现行判断）
-│   └── handoff-kit/
-│       ├── design/              # P0/P1 基线计划（冻结）
-│       ├── acceptance/          # 每阶段验收记录（冻结）
-│       └── GAPS.md              # 挂账与边界台账（追加式）
-└── plugins/
-    └── dsh-handoff-kit/
+├── LICENSE
+├── scripts/docs-check.mjs          # documentation drift checks
+├── docs/                            # Chinese governance docs (index, ADRs, plans, acceptance, gaps)
+└── plugins/dsh-handoff-kit/         # the DSH bundle (+ CLI, spec, schema, tests)
 ```
+
+- Phase and status authority: [`ROADMAP.md`](ROADMAP.md); documentation index:
+  [`docs/README.md`](docs/README.md).
+- Development: `cd plugins/dsh-handoff-kit && npm test`; repository doc check:
+  `node scripts/docs-check.mjs` (zero errors required).
+- CI: Windows runs the full test suite + doc check; Linux/macOS run unit tests as
+  **experimental** (non-blocking) jobs.
+
+## Other plugins
+
+This repository is a multi-plugin monorepo; `dsh-handoff-kit` is currently the only
+plugin in it. New plugins will be added as `plugins/<package-name>/`.

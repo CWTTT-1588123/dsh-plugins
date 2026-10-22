@@ -1,10 +1,18 @@
 {
   "name": "dsh-handoff-kit",
   "version": "0.3.1",
-  "private": true,
   "description": "Deterministic session handoff packages (HANDOFF.md + manifest.json) for DeepSeek Harness",
   "type": "module",
   "main": "index.js",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/CWTTT-1588123/dsh-plugins.git",
+    "directory": "plugins/dsh-handoff-kit"
+  },
+  "homepage": "https://github.com/CWTTT-1588123/dsh-plugins/tree/main/plugins/dsh-handoff-kit#readme",
+  "bugs": {
+    "url": "https://github.com/CWTTT-1588123/dsh-plugins/issues"
+  },
   "bin": {
     "handoff-kit": "./bin/handoff-kit.mjs"
   },
@@ -27,7 +35,8 @@
     "locale/*.json",
     "icon.svg",
     "cordis.patch.yml",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
   "scripts": {
     "test": "node --test \"test/**/*.test.js\""

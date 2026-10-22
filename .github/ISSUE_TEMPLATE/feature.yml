@@ -1,0 +1,47 @@
+name: Feature request
+description: Suggest a capability or improvement for dsh-handoff-kit
+title: "[feature] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please keep requests aligned with the project's boundaries: local-only,
+        deterministic, zero runtime dependencies, no network, no subprocess, no
+        automatic execution. See the [ROADMAP](https://github.com/CWTTT-1588123/dsh-plugins/blob/main/ROADMAP.md).
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What problem are you trying to solve? Who is affected?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What should the plugin do differently? If it changes the handoff package format, mention compatibility.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Workarounds or other designs you considered.
+    validations:
+      required: false
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Affected surface
+      multiple: true
+      options:
+        - tool (handoff_pack / handoff_load)
+        - command (/handoff)
+        - UI workbench
+        - CLI (handoff-kit)
+        - spec / schema
+        - docs
+        - other
+    validations:
+      required: true

@@ -1,0 +1,68 @@
+name: CI
+
+# M4 public CI:
+#   - Windows is the required platform (full tests + docs:check + npm pack dry-run).
+#   - Linux/macOS run the unit suite as EXPERIMENTAL (non-blocking): the test
+#     fixtures intentionally use Windows-style roots, so cross-platform support is
+#     not promised for 1.0 (see ROADMAP / P3_plan A7).
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    name: Windows (required)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # docs:check verifies recorded commits exist in history
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Unit tests
+        working-directory: plugins/dsh-handoff-kit
+        run: npm test
+      - name: Documentation drift check
+        run: node scripts/docs-check.mjs
+      - name: npm pack dry-run (publish file list)
+        working-directory: plugins/dsh-handoff-kit
+        run: npm pack --dry-run --json > pack-dry-run.json
+      - name: Show packed files
+        working-directory: plugins/dsh-handoff-kit
+        shell: pwsh
+        run: |
+          $pack = Get-Content -Raw -Encoding utf8 pack-dry-run.json | ConvertFrom-Json
+          $pack[0].files | ForEach-Object { $_.path }
+
+  linux-experimental:
+    name: Linux (experimental)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Unit tests (experimental, may fail on Windows-path fixtures)
+        working-directory: plugins/dsh-handoff-kit
+        run: npm test
+
+  macos-experimental:
+    name: macOS (experimental)
+    runs-on: macos-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Unit tests (experimental, may fail on Windows-path fixtures)
+        working-directory: plugins/dsh-handoff-kit
+        run: npm test

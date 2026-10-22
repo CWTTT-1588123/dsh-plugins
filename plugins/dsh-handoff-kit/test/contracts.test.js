@@ -28,7 +28,13 @@ const packageJson = JSON.parse(readFileSync(new URL('../package.json', import.me
 test('package metadata matches the contracts version and bundle marker', () => {
   assert.equal(packageJson.name, 'dsh-handoff-kit')
   assert.equal(packageJson.version, PLUGIN_VERSION)
-  assert.equal(packageJson.private, true)
+  // M4: the package is publishable (private removed) and carries release metadata.
+  assert.notEqual(packageJson.private, true)
+  assert.equal(packageJson.license, 'MIT')
+  assert.match(packageJson.repository.url, /github\.com[:/]CWTTT-1588123\/dsh-plugins/)
+  assert.equal(packageJson.repository.directory, 'plugins/dsh-handoff-kit')
+  assert.equal(packageJson.bin['handoff-kit'], './bin/handoff-kit.mjs')
+  assert.equal(packageJson.engines.node, '>=20')
   assert.equal(packageJson.type, 'module')
   assert.equal(packageJson.main, 'index.js')
   assert.deepEqual(packageJson.dsh.bundle, { patch: './cordis.patch.yml' })
