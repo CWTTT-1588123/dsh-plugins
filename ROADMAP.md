@@ -47,7 +47,10 @@ fake 策略单测为补充而非替代。剩下的只是 P0 设计边界（无 g
 - 批次 `append` / `update` 与 `supersedes` 链（同一工作连续交接）；
 - opt-in LLM 叙述增强（默认关）；
 - 自动草稿钩子（会话结束/压缩前，opt-in 默认关）；
-- 补测 P0 挂账：read-only/workspace-write 真实链路、`/handoff` UI 驱动。
+- （工具链，可选）任务板执行器缺陷 G12 修复后，把「卡片自动补测」纳入回归；
+  P0 的权限矩阵与 `/handoff` UI 已实测关闭，无需再补。
+
+**设计文档**（开工前必须写）：`docs/handoff-kit/design/P1_plan.md`（尚未创建）。
 
 **门槛**：真项目连续两次交接；漂移检测准确；自动草稿不误触发；成本与隐私可测。
 
