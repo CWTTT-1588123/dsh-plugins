@@ -44,7 +44,12 @@ function parseArgs(argv) {
 }
 
 function runGit(root, args) {
-  return execFileSync('git', ['-C', root, ...args], { encoding: 'utf8' }).trim()
+  // Force core.quotepath=false: CI runners default to quotepath=true, which
+  // C-quotes non-ASCII (e.g. Chinese archive) paths. The quoted forms would then
+  // disagree with the index/worktree and produce false DC1/DC2/DC3 errors.
+  return execFileSync('git', ['-c', 'core.quotepath=false', '-C', root, ...args], {
+    encoding: 'utf8'
+  }).trim()
 }
 
 function toPosix(path) {
