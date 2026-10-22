@@ -1,7 +1,10 @@
 # 创造模式会话启动提示词：dsh-handoff-kit P0 实现
 
 > **推荐用法**：在 DSH Web 新开会话，**工作区选 `D:\repos\dsh-plugins`**，
-> 权限选 **danger-full-access**（安装 bundle 与写用户级输出需要），
+> **模式选「创造模式（cordis）」**——安装/回滚需要 `plugin_manager`、验收需要
+> `cordis_inspect` 工具，二者只在 cordis 预设启用（standard 模式的 plugin_manager
+> 行是 disabled，且没有 cordis 工具）；
+> **权限选 danger-full-access**（安装 bundle 与写用户级输出需要），
 > 首条消息发送下面「启动消息」代码块即可——让 AI 自己用 read 工具读取本文件，
 > **不要手工粘贴本文件全文**（表格、空格、代码块在粘贴时容易错位）。
 >
