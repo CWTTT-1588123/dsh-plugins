@@ -8,6 +8,9 @@ before trusting the claims. Host half (tools/command/skill/service) plus a **pro
 Client half** (0.3.0/P2) that puts generation/loading on a clickable workbench. No LLM, no DB,
 no external network, no subprocess.
 
+**标准交接流程（中文使用说明）**：[USAGE.md](USAGE.md) — 旧会话生成 → 新会话只粘贴提示词 →
+旁证只读复核 → 新会话收到明确指令后再开工。**粘贴即安全，无需额外保险操作。**
+
 ## What it provides
 
 | Surface | Name | Purpose |
