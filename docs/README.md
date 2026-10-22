@@ -1,6 +1,6 @@
 # dsh-plugins 文档索引（唯一入口）
 
-<!-- docs-meta: status=current; phase=cross; verified=c5fe455@2026-10-22; tracks=-; supersedes=-; superseded-by=- -->
+<!-- docs-meta: status=current; phase=cross; verified=0a2cbc9@2026-10-23; tracks=-; supersedes=-; superseded-by=- -->
 
 > 状态：**current**（2026-10-22 建立，D1）
 > 读者：用户 + 所有 AI 会话
@@ -52,6 +52,7 @@
 | [P0 模块接口](handoff-kit/design/P0_module_interfaces.md) | 规格 | frozen | P0 | P0 模块级接口规格 |
 | [P1 实施计划](handoff-kit/design/P1_plan.md) | 计划 | frozen | P1 | P1 实施基线（D3 已改为"已完成/frozen"） |
 | [P2 实施计划（UI 工作台）](handoff-kit/design/P2_plan.md) | 计划 | frozen | P2 | UI 工作台 v1：入口/面板/工作台页/U0–U4（已完成，D5 收尾冻结） |
+| [P3 实施计划（平台化 1.0）](handoff-kit/design/P3_plan.md) | 计划 | current | P3 | 规范公开/迁移器/跨工具 CLI/发布/签名策略/公开门面（A 档开源公开产品；2026-10-23 开工，M0–M6） |
 | [P2 启动提示词](handoff-kit/START_PROMPT_P2.md) | 入口（历史） | frozen | P2 | D5 启动场景历史记录；P2 完成后不再作为新会话入口 |
 | [旧设计索引（历史）](archive/handoff-kit/design-README.md) | 索引（旧） | historical | — | 被本索引取代；D3 已归档 |
 | [通用交接包生成器 v1（历史）](archive/handoff-kit/20261022_通用交接包生成器_v1.md) | 方法论 | historical | — | 用户原意 + H0–H9 方法论；D3 已归档，内容仍有效 |
@@ -75,8 +76,9 @@
 | `docs/handoff-kit/design/P2_plan.md` | 已建 | D4 |
 | `docs/handoff-kit/START_PROMPT_P2.md` | 已建 | D4 |
 | `docs/handoff-kit/acceptance/P2.md` | 已建 | D5 / U4 |
+| `docs/handoff-kit/design/P3_plan.md` | 已建 | M0（2026-10-23 批准） |
 
-D5（P2 实现）已完成；P3 开工前按 ROADMAP 先补 P3 设计文档，无需其他待建文档。
+D5（P2 实现）已完成；P3 设计文档已建（`P3_plan.md`，2026-10-23 开工），无需其他待建文档。
 
 ## 6. 归档规则
 

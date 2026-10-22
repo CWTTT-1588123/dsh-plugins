@@ -1,10 +1,10 @@
 # dsh-plugins ROADMAP
 
-<!-- docs-meta: status=current; phase=cross; verified=c5fe455@2026-10-22; tracks=-; supersedes=-; superseded-by=- -->
+<!-- docs-meta: status=current; phase=cross; verified=0a2cbc9@2026-10-23; tracks=-; supersedes=-; superseded-by=- -->
 
 > 本文件是插件仓库**阶段与状态的唯一权威**。规划、进度、验收均以这里为准；
 > 每阶段的设计与验收见 `docs/<插件>/{design,acceptance}/`。
-> 最后更新：2026-10-22
+> 最后更新：2026-10-23
 
 ## 状态总览
 
@@ -13,7 +13,7 @@
 | P0 | 0.1.x | 手动生成 + 校验闭环 | **done**（0.1.0，2026-10-22） | [P0 实施计划](docs/handoff-kit/design/P0_implementation_plan.md) | [P0 验收记录](docs/handoff-kit/acceptance/P0.md) |
 | P1 | 0.2.x | 真实改动证据 + 消费闭环 + 轻自动 | **done**（0.2.0，2026-10-22；0.2.1 挂账清理） | [P1 实施计划](docs/handoff-kit/design/P1_plan.md) | [P1 验收记录](docs/handoff-kit/acceptance/P1.md) |
 | P2 | 0.3.x | UI 工作台（对接提示词优先） | **done**（0.3.0，2026-10-22；0.3.1 提示词安全修复） | [P2 计划](docs/handoff-kit/design/P2_plan.md) | [P2 验收记录](docs/handoff-kit/acceptance/P2.md) |
-| P3 | 1.0 | 规范与分发 | 未开始 | — | — |
+| P3 | 1.0 | 规范与分发 | **进行中**（M0 完成，2026-10-23 开工） | [P3 实施计划](docs/handoff-kit/design/P3_plan.md) | 进行中（M6 产出） |
 
 ## P0 — 可用（0.1.x）
 
@@ -105,9 +105,13 @@ UI 点击写入，复制开场提示词 trust=verified；旧批次漂移显示 s
 
 ## P3 — 平台化（1.0）
 
+**设计文档**：[`docs/handoff-kit/design/P3_plan.md`](docs/handoff-kit/design/P3_plan.md)（v1.0，2026-10-23 **已批准，执行计划**；A 档 = 开源公开产品）
+
+> **开工记录（2026-10-23，用户确认）**：P3 进入 M0 并完成；发布资源（npm 账号+2FA、GitHub 公开仓库）因注册受阻**延后到 M4 前**，不阻塞规范/迁移器/跨工具 CLI（M0–M3）；包名 `dsh-handoff-kit` 已确认未被占用。设计范围见计划 §2.1（T1–T6），里程碑 M0–M6，门槛如下。
+
 - `manifest@2` / `HANDOFF.md` 规范公开 + schema 迁移器；
 - 跨工具适配器（其他 agent / CLI 消费同一交接包）；
-- npm / 插件市场发布；
+- npm / 插件市场发布（插件市场仅可选渠道，不列 1.0 门槛）；
 - 签名 / 审计 / 脱敏策略配置。
 
 **门槛**：第三方可独立安装使用 + 迁移演练通过。
