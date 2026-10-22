@@ -6,6 +6,7 @@
 | 文档 | 性质 | 说明 |
 |---|---|---|
 | [P0_implementation_plan.md](P0_implementation_plan.md) | **现行权威** | P0 的包/工具/命令/技能/数据契约/测试验收/实施阶段 |
+| [P1_plan.md](P1_plan.md) | **P1 计划（draft，待审）** | P1（0.2.x）：handoff_load/resume 消费闭环、workspaceChanges 真实改动证据、append/supersedes、goal/jobs 只读燃料、opt-in LLM/钩子 |
 | [P0_module_interfaces.md](P0_module_interfaces.md) | **实现规格** | P0 并行实现的模块级接口：导出签名、数据形状、确定性规则、测试门槛 |
 | [20261022_创造模式会话启动提示词.md](20261022_创造模式会话启动提示词.md) | 历史 | 首次会话入口；路径与部分决策已过时 |
 | [20261022_dsh-handoff-kit_P0实施说明.md](20261022_dsh-handoff-kit_P0实施说明.md) | 历史草案 | P0 初版形态；动作命名/输出目录/工具位置已被更新 |

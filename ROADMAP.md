@@ -9,7 +9,7 @@
 | 阶段 | 版本 | 目标 | 状态 | 设计 | 验收 |
 |---|---|---|---|---|---|
 | P0 | 0.1.x | 手动生成 + 校验闭环 | **done**（0.1.0，2026-10-22） | [P0 实施计划](docs/handoff-kit/design/P0_implementation_plan.md) | [P0 验收记录](docs/handoff-kit/acceptance/P0.md) |
-| P1 | 0.2.x | 真实改动证据 + 消费闭环 + 轻自动 | 未开始 | — | — |
+| P1 | 0.2.x | 真实改动证据 + 消费闭环 + 轻自动 | **设计中**（计划待审） | [P1 实施计划](docs/handoff-kit/design/P1_plan.md) | 待写 |
 | P2 | 0.3.x | 协作与可视化 | 未开始 | — | — |
 | P3 | 1.0 | 规范与分发 | 未开始 | — | — |
 
@@ -50,7 +50,7 @@ fake 策略单测为补充而非替代。剩下的只是 P0 设计边界（无 g
 - （工具链，可选）任务板执行器缺陷 G12 修复后，把「卡片自动补测」纳入回归；
   P0 的权限矩阵与 `/handoff` UI 已实测关闭，无需再补。
 
-**设计文档**（开工前必须写）：`docs/handoff-kit/design/P1_plan.md`（尚未创建）。
+**设计文档**（开工前必须写）：[`docs/handoff-kit/design/P1_plan.md`](docs/handoff-kit/design/P1_plan.md)（v1-draft，**待你评审** §10 Q1–Q5 后开工）。
 
 **门槛**：真项目连续两次交接；漂移检测准确；自动草稿不误触发；成本与隐私可测。
 
