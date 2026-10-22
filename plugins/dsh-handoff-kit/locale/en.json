@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Handoff Kit",
+    "description": "Generates, verifies and lists deterministic session handoff packages (HANDOFF.md + manifest.json) with git and file-hash evidence."
+  }
+}

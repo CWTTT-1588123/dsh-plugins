@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "交接包工具",
+    "description": "生成、校验与列出确定性的会话交接包（HANDOFF.md + manifest.json），带 git 与文件哈希证据。"
+  }
+}

@@ -8,7 +8,7 @@
 
 | 阶段 | 版本 | 目标 | 状态 | 设计 | 验收 |
 |---|---|---|---|---|---|
-| P0 | 0.1.x | 手动生成 + 校验闭环 | **进行中**（计划已批准，待实现） | [P0 实施计划](docs/handoff-kit/design/P0_implementation_plan.md) | 待写 |
+| P0 | 0.1.x | 手动生成 + 校验闭环 | **done**（0.1.0，2026-10-22） | [P0 实施计划](docs/handoff-kit/design/P0_implementation_plan.md) | [P0 验收记录](docs/handoff-kit/acceptance/P0.md) |
 | P1 | 0.2.x | 真实改动证据 + 消费闭环 + 轻自动 | 未开始 | — | — |
 | P2 | 0.3.x | 协作与可视化 | 未开始 | — | — |
 | P3 | 1.0 | 规范与分发 | 未开始 | — | — |
@@ -30,6 +30,11 @@
 **DoD**：L1–L3 全过（见实施计划第 9 节）+ 新会话仅凭 `HANDOFF.md` + `manifest.json`
 能回答“上次做到哪、下一步、要复核哪几条”。
 
+**验收结论**（2026-10-22）：L1 全过；L2 边界 B1–B8 全过；L3 的 danger-full-access、
+回滚演练、DSH 源码零改动通过，read-only/workspace-write 真实链路因需切换会话权限
+**未实测**（fake 策略单测覆盖，缺口 G5 已挂账）。详见
+[P0 验收记录](docs/handoff-kit/acceptance/P0.md)。
+
 **交付物**：`plugins/dsh-handoff-kit/`、`docs/handoff-kit/acceptance/P0.md`、CHANGELOG 0.1.0。
 
 ## P1 — 好用（0.2.x）
@@ -39,7 +44,8 @@
 - 消费侧闭环：`handoff_load` 工具 / `/handoff resume`（verify + 读取 + 漂移报告）；
 - 批次 `append` / `update` 与 `supersedes` 链（同一工作连续交接）；
 - opt-in LLM 叙述增强（默认关）；
-- 自动草稿钩子（会话结束/压缩前，opt-in 默认关）。
+- 自动草稿钩子（会话结束/压缩前，opt-in 默认关）；
+- 补测 P0 挂账：read-only/workspace-write 真实链路、`/handoff` UI 驱动。
 
 **门槛**：真项目连续两次交接；漂移检测准确；自动草稿不误触发；成本与隐私可测。
 
