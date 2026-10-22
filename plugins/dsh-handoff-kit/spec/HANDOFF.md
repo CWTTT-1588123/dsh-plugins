@@ -1,6 +1,6 @@
 # Handoff Package Specification (HANDOFF.md + manifest.json + evidence)
 
-<!-- docs-meta: status=current; phase=P3; verified=a57385a@2026-10-23; tracks=-; supersedes=-; superseded-by=- -->
+<!-- docs-meta: status=current; phase=P3; verified=e3e6cba@2026-10-23; tracks=-; supersedes=-; superseded-by=- -->
 
 > Status: **1.0 draft (P3/M1, 2026-10-23)** — normative for generated batches; frozen at 1.0.
 > Implemented by `dsh-handoff-kit` (plugin version 0.3.1 at spec start). Machine-readable companion: [`../schema/manifest.v1.json`](../schema/manifest.v1.json), [`../schema/manifest.v2.json`](../schema/manifest.v2.json); verification algorithm: [`verify.md`](verify.md).

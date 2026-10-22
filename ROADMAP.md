@@ -1,6 +1,6 @@
 # dsh-plugins ROADMAP
 
-<!-- docs-meta: status=current; phase=cross; verified=f656c09@2026-10-23; tracks=-; supersedes=-; superseded-by=- -->
+<!-- docs-meta: status=current; phase=cross; verified=e3e6cba@2026-10-23; tracks=-; supersedes=-; superseded-by=- -->
 
 > 本文件是插件仓库**阶段与状态的唯一权威**。规划、进度、验收均以这里为准；
 > 每阶段的设计与验收见 `docs/<插件>/{design,acceptance}/`。
@@ -13,7 +13,7 @@
 | P0 | 0.1.x | 手动生成 + 校验闭环 | **done**（0.1.0，2026-10-22） | [P0 实施计划](docs/handoff-kit/design/P0_implementation_plan.md) | [P0 验收记录](docs/handoff-kit/acceptance/P0.md) |
 | P1 | 0.2.x | 真实改动证据 + 消费闭环 + 轻自动 | **done**（0.2.0，2026-10-22；0.2.1 挂账清理） | [P1 实施计划](docs/handoff-kit/design/P1_plan.md) | [P1 验收记录](docs/handoff-kit/acceptance/P1.md) |
 | P2 | 0.3.x | UI 工作台（对接提示词优先） | **done**（0.3.0，2026-10-22；0.3.1 提示词安全修复） | [P2 计划](docs/handoff-kit/design/P2_plan.md) | [P2 验收记录](docs/handoff-kit/acceptance/P2.md) |
-| P3 | 1.0 | 规范与分发 | **进行中**（M0/M1 完成，2026-10-23） | [P3 实施计划](docs/handoff-kit/design/P3_plan.md) | 进行中（M6 产出） |
+| P3 | 1.0 | 规范与分发 | **进行中**（M0/M1/M2 完成，2026-10-23） | [P3 实施计划](docs/handoff-kit/design/P3_plan.md) | 进行中（M6 产出） |
 
 ## P0 — 可用（0.1.x）
 
@@ -110,6 +110,8 @@ UI 点击写入，复制开场提示词 trust=verified；旧批次漂移显示 s
 > **开工记录（2026-10-23，用户确认）**：P3 进入 M0 并完成；发布资源（npm 账号+2FA、GitHub 公开仓库）因注册受阻**延后到 M4 前**，不阻塞规范/迁移器/跨工具 CLI（M0–M3）；包名 `dsh-handoff-kit` 已确认未被占用。设计范围见计划 §2.1（T1–T6），里程碑 M0–M6，门槛如下。
 >
 > **M1 完成（2026-10-23，提交 `f656c09`）**：英文规范 [交接包格式](plugins/dsh-handoff-kit/spec/HANDOFF.md) + [验证算法](plugins/dsh-handoff-kit/spec/verify.md)、`schema/manifest.v1/v2.json`、`test/spec.test.js` 规范向量；`npm test` 全绿、`docs:check` 0 error。
+>
+> **M2 完成（2026-10-23，提交 `e3e6cba`）**：`handoff_pack action=migrate` / `/handoff migrate`——v1→v2，源批次只读且字节不变，`evidence/migration.json` 记录 provenance，`changes`/`fuel` 标 unavailable、不建 lineage；`test/migration.test.js` 覆盖负例；`npm test` 全绿。
 
 - `manifest@2` / `HANDOFF.md` 规范公开 + schema 迁移器；
 - 跨工具适配器（其他 agent / CLI 消费同一交接包）；

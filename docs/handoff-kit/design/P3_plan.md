@@ -1,6 +1,6 @@
 # dsh-handoff-kit P3 设计草案——平台化（1.0，A 档：开源公开产品）
 
-<!-- docs-meta: status=current; phase=P3; verified=f656c09@2026-10-23; tracks=plugins/dsh-handoff-kit/src,plugins/dsh-handoff-kit/spec,plugins/dsh-handoff-kit/schema; supersedes=-; superseded-by=- -->
+<!-- docs-meta: status=current; phase=P3; verified=e3e6cba@2026-10-23; tracks=plugins/dsh-handoff-kit/src; supersedes=-; superseded-by=- -->
 
 > 版本：**v1.0（2026-10-23，P3 执行计划；用户批准开工）**。
 > 产品档位：**A —— 开源公开产品**（用户 2026-10-22 两轮对齐确认，决议见 §0.1）。
@@ -242,7 +242,7 @@ handoff-kit verify-signature <batchDir> [--pubkey <path|keyId>]
 |---|---|---|---|
 | **M0 评审收口与基线**（✅ 已完成 2026-10-23） | 本文件批准为执行计划；A 档决议落档；P3 验收计划；包名占用检查（已完成）；DSH 版本支持矩阵实测；`LICENSE`/Issue 模板/CI 落点确认。**发布资源（npm 账号+2FA、GitHub 公开仓库）延后到 M4 前**（用户 2026-10-23 指示）。**不改产品代码** | 本文件 + 索引/ROADMAP 同步 + M0 决议 | 用户确认开工（2026-10-23） |
 | **M1 规范公开**（✅ 已完成 2026-10-23） | 英文 `spec/HANDOFF.md`、`spec/verify.md`、`schema/manifest.v1/v2.json`；规范测试向量（合规/反例 fixture） | 规范 + schema + `test/spec.test.js` 向量 | 规范落地；`npm test` 全绿；`docs:check` 0 error（M1 提交 `f656c09`） |
-| **M2 schema 迁移器** | `migrate`（插件工具 + CLI）；v1→v2；`evidence/migration.json`；迁移测试与幂等/只读源断言 | 迁移器 + 单测 | 迁移演练证据（§6.2） |
+| **M2 schema 迁移器**（✅ 已完成 2026-10-23） | `migrate`（插件工具 + `/handoff migrate`）；v1→v2；`evidence/migration.json` provenance；迁移测试与只读源断言 | 迁移器 + `test/migration.test.js` | 源批次零写入/字节不变；新批次 verify 通过；`npm test` 全绿（M2 提交 `e3e6cba`） |
 | **M3 跨工具适配** | CLI `verify/load/list` + 英文 `--help`；非 DSH 环境 E2E（临时目录、纯 Node）；"独立 agent 按 spec 只读复验"演练 | CLI + 消费演练记录 | 用户确认消费闭环 |
 | **M4 发布与公开门面** | `package.json` 发布元数据定稿；`npm pack --dry-run` 核对；**T6 门面**（英文 README/`LICENSE`/Issue 模板/隐私安全声明/CI/英文 UI+locale/P2-G1 选择器）；`1.0.0-rc.N` 发布到 `next`（**首次用户手动**）；bundle 通过 npm spec 安装/卸载/回滚演练；插件市场可选 | npm rc 包 + 公开仓库 + 安装/回滚记录 | 用户逐次授权；安装回执；CI 全绿 |
 | **M5 可信度外层** | 签名 opt-in + 策略配置 + 审计回执；负例测试（坏签名/篡改/坏策略 fail-closed） | 签名/策略实现 + 测试 | 负例全绿；默认路径零依赖不变 |
@@ -331,7 +331,8 @@ M0 评审/基线 → M1 规范 → M2 迁移器 → M3 跨工具适配 → M4 �
 - 2026-10-22 22:25：v0.1.1 基线刷新——仓库 HEAD 由 `589c3f6` 前进到 `0a2cbc9`（文档提交；代码/版本未变），§1 与 docs-meta `verified` 同步。
 - 2026-10-22 23:05：**v0.2 A 档对齐落档**——用户确认产品档位 A（开源公开产品）并完成两轮选项对齐；新增 §0.1 定位与 15 条决议（A1–A15）、T6 公开门面与合规、D9 语言门面、D10 平台 CI；D5/D6/D7/D8 定稿；§9 由开放问题改为决议记录；新增 R12–R16。本文件仍为未跟踪草案，未 commit。
 - 2026-10-23 00:20：**v1.0 批准开工（M0 完成）**——用户 2026-10-23 确认「总之进行P3吧」，P3 进入执行；M0 决议：①发布资源（npm 账号+2FA、GitHub 公开仓库）因注册受阻**延后到 M4 前**，不阻塞 M0–M3；②DSH 版本矩阵：当前实测 `0.2.1-rc.2`，1.0 暂维持 `engines.dsh >=0.2.0 <0.3.0`（不声明未验证范围），M4 前再评估；③包名 `dsh-handoff-kit` 未被占用（M0 检查完成）；④文档治理落地：本文件登记入 [docs/README](../../README.md) §4、ROADMAP P3 改为进行中，`docs:check` 0 error。本文件转为 P3 执行计划（current），本地提交、不 push。
-- 2026-10-23 00:26：**M1 规范公开完成（提交 `f656c09`）**——英文规范 `spec/HANDOFF.md`（批次布局/manifest@1/2/HANDOFF H0–H9/证据标签/trust）与 `spec/verify.md`（验证步骤/finding 码/CLI 退出码）；`schema/manifest.v1.json`（v2 派生，历史兼容）与 `schema/manifest.v2.json`；`test/spec.test.js` + `test/helpers/json-schema-lite.js` 规范向量（正例、版本边界、反例拒绝）；`package.json files` 纳入 `spec/schema`；索引/ROADMAP 同步；`npm test` 全绿（数量以输出为准）、`docs:check` 0 error。下一步 M2 迁移器。
+- 2026-10-23 00:21：**M1 规范公开完成（提交 `f656c09` + 向量 `85c6162`）**——英文规范 `spec/HANDOFF.md`（批次布局/manifest@1/2/HANDOFF H0–H9/证据标签/trust）与 `spec/verify.md`（验证步骤/finding 码/CLI 退出码）；`schema/manifest.v1.json`（v2 派生，历史兼容）与 `schema/manifest.v2.json`；`test/spec.test.js` + `test/helpers/json-schema-lite.js` 规范向量（正例、版本边界、反例拒绝）；`package.json files` 纳入 `spec/schema`；索引/ROADMAP 同步；`npm test` 全绿、`docs:check` 0 error。
+- 2026-10-23 00:24：**M2 schema 迁移器完成（提交 `e3e6cba`）**——新增 `handoff_pack action=migrate` 与 `/handoff migrate <batchId>`：源批次先 verify（error 即拒 `HANDOFF_MIGRATION_SOURCE_INVALID`），仅支持 v1→v2（`HANDOFF_MIGRATION_UNSUPPORTED_VERSION`）；只读源、写新批次；`evidence/migration.json` 记录 source batch id / `SHA256SUMS` 摘要 / 源 generator / 迁移时间 / 工具身份；`changes`/`fuel` 标 `available:false` + `MIGRATED_FROM_V1`；不建 lineage；`test/migration.test.js` 覆盖源字节不变/负例/命令解析；`npm test` 全绿、`docs:check` 0 error。下一步 M3 跨工具 CLI。
 
 **文档治理落点（评审通过后，需另行批准的改动）**：
 

@@ -1,6 +1,6 @@
 # Handoff Package Verification Specification
 
-<!-- docs-meta: status=current; phase=P3; verified=a57385a@2026-10-23; tracks=-; supersedes=-; superseded-by=- -->
+<!-- docs-meta: status=current; phase=P3; verified=e3e6cba@2026-10-23; tracks=-; supersedes=-; superseded-by=- -->
 
 > Status: **1.0 draft (P3/M1, 2026-10-23)** — normative for reference verifiers; frozen at 1.0.
 > Companion to [`HANDOFF.md`](HANDOFF.md) (package format). Implemented by `dsh-handoff-kit` (`handoff_pack action=verify`, `handoff_load`).
