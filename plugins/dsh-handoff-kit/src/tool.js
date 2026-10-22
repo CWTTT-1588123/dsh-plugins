@@ -12,11 +12,17 @@
  */
 
 import {
+  LOAD_ARGUMENTS_SCHEMA,
+  LOAD_OUTPUT_SCHEMA,
+  LOAD_TOOL_DESCRIPTION,
+  LOAD_TOOL_NAME,
+  LOAD_TOOL_TIMEOUT_MS,
   TOOL_ARGUMENTS_SCHEMA,
   TOOL_DESCRIPTION,
   TOOL_NAME,
   TOOL_OUTPUT_SCHEMA,
   TOOL_TIMEOUT_MS,
+  validateLoadArgs,
   validateToolArgs
 } from './contracts.js'
 
@@ -83,6 +89,47 @@ export function createTool(service) {
     async execute(rawArgs, exec) {
       const args = validateToolArgs(rawArgs)
       return service.run(args, { agent: exec?.agent, signal: exec?.signal })
+    }
+  }
+}
+
+/** One to three lines the model sees for a settled `handoff_load` call. */
+export function summarizeLoadResult(value) {
+  if (value === null || typeof value !== 'object') return ['handoff_load completed']
+  const verification = value.verification
+  const counts =
+    verification === undefined || verification === null
+      ? 'verification skipped'
+      : `${verification.counts.errors} errors, ${verification.counts.warnings} warnings`
+  const lines = [`load ${value.batchId ?? ''}: trust=${value.trust ?? 'unknown'} (${counts})`]
+  if (typeof value.handoff?.path === 'string') lines.push(`handoff: ${value.handoff.path}`)
+  const next = Array.isArray(value.next) ? value.next[0] : undefined
+  if (typeof next === 'string') lines.push(`next: ${next}`)
+  return lines.slice(0, 3)
+}
+
+/**
+ * Build the registry-ready `handoff_load` tool definition (read-only).
+ * @param {{load: Function}} service
+ */
+export function createLoadTool(service) {
+  return {
+    name: LOAD_TOOL_NAME,
+    description: LOAD_TOOL_DESCRIPTION,
+    parameters: LOAD_ARGUMENTS_SCHEMA,
+    output: {
+      schema: LOAD_OUTPUT_SCHEMA,
+      render(_args, value) {
+        return [{ type: 'text', text: summarizeLoadResult(value).join('\n') }]
+      }
+    },
+    timeoutMs: LOAD_TOOL_TIMEOUT_MS,
+    isConcurrencySafe() {
+      return true
+    },
+    async execute(rawArgs, exec) {
+      const args = validateLoadArgs(rawArgs)
+      return service.load(args, { agent: exec?.agent, signal: exec?.signal })
     }
   }
 }

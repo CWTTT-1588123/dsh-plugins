@@ -10,11 +10,13 @@ test('index exports the bundle identity and hard dependencies', () => {
   assert.deepEqual(inject, ['tools', 'commands', 'skills', 'fs', 'sessions', 'sandboxPolicy'])
 })
 
-test('apply registers exactly one tool, one command and one skill provider', () => {
+test('apply registers the two tools, one command and one skill provider', () => {
   const ctx = createFakeCtx({ fs: createFixtureFs() })
   apply(ctx)
-  assert.equal(ctx.registered.tools.length, 1)
-  assert.equal(ctx.registered.tools[0].name, 'handoff_pack')
+  assert.deepEqual(
+    ctx.registered.tools.map((tool) => tool.name),
+    ['handoff_pack', 'handoff_load']
+  )
   assert.equal(ctx.registered.commands.length, 1)
   assert.equal(ctx.registered.commands[0].name, 'handoff')
   assert.equal(ctx.registered.skillProviders.length, 1)

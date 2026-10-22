@@ -10,7 +10,8 @@ no network, no subprocess.
 | Surface | Name | Purpose |
 |---|---|---|
 | Tool | `handoff_pack` | `scan` / `create` / `verify` / `list` handoff packages |
-| Command | `/handoff` | Human shortcut: create (default), scan, verify, list |
+| Tool | `handoff_load` | Read-only consumption: verify + trust verdict + drift + pointers (P1/M1) |
+| Command | `/handoff` | Human shortcut: create (default), scan, verify, list, resume |
 | Skill | `handoff-pack` | When and how to generate / consume a handoff package |
 
 ## Output
@@ -52,6 +53,26 @@ filesystem service exposes no mtime. Evidence is therefore: parsed `.git` state
 session's `tool/call` metadata (paths / commands / counts, redacted and truncated;
 message bodies are never mined). `HANDOFF.md` marks every assertion with
 `[文件哈希]` / `[git]` / `[会话]` / `[输入]` / `[待验]`.
+
+## Consume (P1/M1)
+
+A new session should check a package before trusting it:
+
+```text
+handoff_load                                # latest batch of this project (verifies first)
+handoff_load batchId=20261022T053805Z-89b2 include=sections
+handoff_load verifyFirst=false              # skip checks; trust can only be stale
+```
+
+`handoff_load` is read-only. It returns:
+
+- `trust`: `verified` (hashes + source files + git HEAD all consistent) / `stale` (warnings or
+  drift found) / `invalid` (verification errors — do not trust);
+- `verification.findings` + `drift` (same checks as `handoff_pack verify`);
+- pointers to `HANDOFF.md`, `manifest.json`, `SHA256SUMS`, `evidence/session.json`, and
+  optionally bounded excerpts (`include=sections|full` — summary is the default to save context).
+
+Human shortcut: `/handoff resume [<batchId>]` prints the same verdict in Chinese.
 
 ## Verify
 

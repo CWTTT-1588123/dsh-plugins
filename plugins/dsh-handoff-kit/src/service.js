@@ -30,6 +30,7 @@ import {
   HANDOFF_FILE,
   HANDOFF_SUBDIR,
   LIMITS,
+  LOAD_LIMITS,
   MANIFEST_FILE,
   SCHEMA_VERSION,
   SUMS_FILE,
@@ -1112,6 +1113,213 @@ export function createService({
     })
   }
 
+  /** Read a batch file with a byte cap; missing/oversized files degrade to flags. */
+  async function readTextBounded(io, absolutePath, maxBytes) {
+    let info
+    try {
+      info = await io.lstat(absolutePath)
+    } catch {
+      return { missing: true }
+    }
+    if (info === undefined || info.type !== 'file') return { missing: true }
+    const size = Number.isFinite(info.size) ? info.size : maxBytes
+    try {
+      const bytes = await io.readBytes(absolutePath, Math.max(1, Math.min(size, maxBytes)))
+      return { text: Buffer.from(bytes).toString('utf8'), truncated: size > maxBytes }
+    } catch {
+      return { missing: true }
+    }
+  }
+
+  /** Split a HANDOFF.md into bounded H0-H9 + 覆盖说明 excerpts. */
+  function extractHandoffSections(text) {
+    const lines = String(text).split('\n')
+    const sections = []
+    let current
+    for (const line of lines) {
+      const match = /^## (H[0-9]|覆盖说明)\b/.exec(line.trimEnd())
+      if (match !== null) {
+        if (current !== undefined) sections.push(current)
+        current = { id: match[1], heading: line.trim(), lines: [] }
+        continue
+      }
+      if (current !== undefined) current.lines.push(line)
+    }
+    if (current !== undefined) sections.push(current)
+    let budget = LOAD_LIMITS.sectionsMaxChars
+    const out = []
+    for (const section of sections) {
+      if (budget <= 0) break
+      let body = section.lines.join('\n').trim()
+      const cap = Math.min(LOAD_LIMITS.sectionTextMaxChars, budget)
+      let truncated = false
+      if (body.length > cap) {
+        body = body.slice(0, cap)
+        truncated = true
+      }
+      out.push({
+        id: section.id,
+        heading: section.heading,
+        text: body,
+        ...(truncated ? { truncated: true } : {})
+      })
+      budget -= body.length
+    }
+    return out
+  }
+
+  /** Result envelope for `handoff_load` (different required keys than handoff_pack). */
+  function finishLoad(parts) {
+    const value = { ok: true }
+    for (const key of [
+      'batchId',
+      'dir',
+      'displayDir',
+      'trust',
+      'verification',
+      'handoff',
+      'manifest',
+      'pointers',
+      'next',
+      'warnings'
+    ]) {
+      if (parts[key] !== undefined) value[key] = parts[key]
+    }
+    return value
+  }
+
+  /**
+   * Read-only consumption: verify a batch, report a trust verdict and return
+   * pointers (plus bounded HANDOFF excerpts when requested). Never writes.
+   */
+  async function runLoad(args, exec) {
+    const context = await resolveContext(exec)
+    const io = ioFor(exec?.signal)
+    const root = handoffRootFor(args.target, context)
+    const projectInfo = await resolveProject(context, io)
+    const warnings = []
+    let located
+    try {
+      located = await locateBatch({
+        args,
+        root,
+        projectKeyName: projectInfo.project.key,
+        io
+      })
+    } catch (error) {
+      throw handoffError(ERROR.RESUME_NOT_FOUND, `${errorMessageOf(error)}; run handoff_pack action=list`)
+    }
+    const dirToken = tokenizePath(located.dir, context.contexts)
+    const displayDir = await displayOf(located.dir)
+    let verification
+    if (args.verifyFirst !== false) {
+      const verifyResult = await runVerify(
+        { action: 'verify', batchId: located.batchId, target: args.target },
+        exec
+      )
+      verification = verifyResult.verification
+    } else {
+      warnings.push({
+        code: 'VERIFY_SKIPPED',
+        detail: 'verifyFirst=false: hashes and drift were not checked, so trust cannot exceed stale'
+      })
+    }
+
+    let manifest = null
+    const manifestRead = await readTextBounded(io, join(located.dir, MANIFEST_FILE), 2 * 1024 * 1024)
+    let manifestSummary = { path: `${dirToken}/${MANIFEST_FILE}` }
+    if (manifestRead.missing) {
+      warnings.push({ code: 'MANIFEST_MISSING', detail: 'manifest.json could not be read' })
+    } else {
+      try {
+        manifest = parseManifest(manifestRead.text)
+      } catch (error) {
+        warnings.push({ code: 'MANIFEST_INVALID', detail: errorMessageOf(error) })
+      }
+      if (manifest !== null) {
+        manifestSummary = {
+          path: `${dirToken}/${MANIFEST_FILE}`,
+          ...(typeof manifest.batchId === 'string' ? { batchId: manifest.batchId } : {}),
+          ...(typeof manifest.createdAt === 'string' ? { createdAt: manifest.createdAt } : {}),
+          gitHead: typeof manifest.git?.head === 'string' ? manifest.git.head : null,
+          title: typeof manifest.inputs?.title === 'string' ? manifest.inputs.title : null
+        }
+      }
+    }
+
+    const handoffToken = `${dirToken}/${HANDOFF_FILE}`
+    const handoff = { path: handoffToken }
+    const handoffRead = await readTextBounded(io, join(located.dir, HANDOFF_FILE), LOAD_LIMITS.maxHandoffBytes)
+    if (handoffRead.missing) {
+      warnings.push({ code: 'HANDOFF_MISSING', detail: 'HANDOFF.md could not be read' })
+    } else {
+      const text = handoffRead.text
+      if (args.include === 'full') {
+        const maxChars = LOAD_LIMITS.fullMaxBytes
+        handoff.excerpt = text.length > maxChars ? text.slice(0, maxChars) : text
+        if (text.length > maxChars || handoffRead.truncated === true) handoff.truncated = true
+      } else if (args.include === 'sections') {
+        handoff.sections = extractHandoffSections(text)
+      }
+    }
+
+    let trust = 'stale'
+    if (args.verifyFirst === false) {
+      trust = 'stale'
+    } else if (verification === undefined) {
+      trust = 'invalid'
+    } else if (verification.counts.errors > 0) {
+      trust = 'invalid'
+    } else if (
+      verification.counts.warnings > 0 ||
+      verification.drift.gitHeadChanged === true ||
+      verification.drift.sourceFilesChanged > 0 ||
+      verification.drift.sourceFilesMissing > 0
+    ) {
+      trust = 'stale'
+    } else {
+      trust = 'verified'
+    }
+    if (manifest === null && trust === 'verified') trust = 'stale'
+
+    const pointers = [
+      { label: 'HANDOFF.md', path: handoffToken },
+      { label: 'manifest.json', path: `${dirToken}/${MANIFEST_FILE}` },
+      { label: 'SHA256SUMS', path: `${dirToken}/${SUMS_FILE}` },
+      { label: 'session evidence', path: `${dirToken}/${EVIDENCE_DIR}/session.json` }
+    ]
+    const next =
+      trust === 'verified'
+        ? [
+            `read ${handoffToken} in order H2 → H3 → H4 → H8`,
+            're-hash at least 3 H4 assertions before relying on them',
+            'then continue the previous work; do not re-derive it from memory'
+          ]
+        : trust === 'stale'
+          ? [
+              `run handoff_pack action=verify batchId=${located.batchId} to inspect all drift findings`,
+              `read ${handoffToken} H6 (risks) and H8 (first actions) before trusting any claim`,
+              `if the package is superseded, load the newest batch instead`
+            ]
+          : [
+              `stop: batch ${located.batchId} failed verification (see verification.findings)`,
+              'run handoff_pack action=list to pick another batch',
+              'regenerate with handoff_pack action=create force=true only if the package is known-stale'
+            ]
+    return finishLoad({
+      batchId: located.batchId,
+      dir: dirToken,
+      displayDir,
+      trust,
+      ...(verification !== undefined ? { verification } : {}),
+      handoff,
+      manifest: manifestSummary,
+      pointers,
+      next,
+      warnings: mergeWarnings(warnings)
+    })
+  }
+
   function finish(parts) {
     const value = {}
     for (const key of RESULT_KEY_ORDER) {
@@ -1139,7 +1347,7 @@ export function createService({
     }
   }
 
-  return { run }
+  return { run, load: runLoad }
 }
 
 /** Internal helpers exposed for service tests (not part of the plugin contract). */

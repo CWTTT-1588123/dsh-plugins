@@ -14,6 +14,9 @@
 - `docs/handoff-kit/design/P1_plan.md`：P1（0.2.x）实施计划（2026-10-22 已评审通过；
   M1 消费闭环 / M2 workspaceChanges+血缘 / M3 仅接口与文档；Q1–Q5 决议见文档 §10）。
   不改变已发布 0.1.0 行为。
+- **P1 M1（开发中）**：`handoff_load` 工具（只读消费：verify + `trust=verified|stale|invalid`
+  + findings/drift + 指针 + `include=summary|sections|full` 有界摘录）；
+  `/handoff resume [<batchId>]` 命令（同一 trust 判定的中文摘要）。
 
 ## [0.1.0] - 2026-10-22
 

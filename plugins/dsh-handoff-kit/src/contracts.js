@@ -62,6 +62,8 @@ export const ERROR = Object.freeze({
   PATH_ESCAPE: 'HANDOFF_PATH_ESCAPE',
   BATCH_EXISTS: 'HANDOFF_BATCH_EXISTS',
   BATCH_NOT_FOUND: 'HANDOFF_BATCH_NOT_FOUND',
+  RESUME_NOT_FOUND: 'HANDOFF_RESUME_NOT_FOUND',
+  VERIFY_INVALID: 'HANDOFF_VERIFY_INVALID',
   MANIFEST_MISSING: 'HANDOFF_MANIFEST_MISSING',
   MANIFEST_INVALID: 'HANDOFF_MANIFEST_INVALID',
   WRITE_FAILED: 'HANDOFF_WRITE_FAILED',
@@ -445,6 +447,198 @@ export const TOOL_ARGUMENTS_SCHEMA = Object.freeze({
     }
   }
 })
+
+/** The `handoff_load` tool name (P1 M1). */
+export const LOAD_TOOL_NAME = 'handoff_load'
+/** Load is a read-only consumer; a shorter timeout than create is enough. */
+export const LOAD_TOOL_TIMEOUT_MS = 60_000
+/** `handoff_load` include modes. */
+export const LOAD_INCLUDE_MODES = Object.freeze(['summary', 'sections', 'full'])
+/** Bounds for loading a package back into a session. */
+export const LOAD_LIMITS = Object.freeze({
+  /** Refuse to load a HANDOFF.md larger than this (bytes). */
+  maxHandoffBytes: 256 * 1024,
+  /** `include=full` inlines at most this many bytes; the rest is truncated. */
+  fullMaxBytes: 24 * 1024,
+  /** `include=sections` total inline budget (characters). */
+  sectionsMaxChars: 4000,
+  /** Per-section inline budget (characters). */
+  sectionTextMaxChars: 1500
+})
+
+/** Trust levels reported by `handoff_load`. */
+export const TRUST_LEVELS = Object.freeze(['verified', 'stale', 'invalid'])
+
+/**
+ * Tool description for `handoff_load` (English, per ADR decision 10).
+ */
+export const LOAD_TOOL_DESCRIPTION =
+  'Load a deterministic session handoff package written by handoff_pack: verify its hashes, ' +
+  'report source/git drift, and return a trust verdict plus pointers to HANDOFF.md and ' +
+  'manifest.json. Call this before trusting a handover; pass include=sections or include=full ' +
+  'only when you need the narrative inline.'
+
+/** `handoff_load` parameters (raw JSON Schema; self-validated). */
+export const LOAD_ARGUMENTS_SCHEMA = Object.freeze({
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    batchId: {
+      type: 'string',
+      description: 'Batch to load: YYYYMMDDTHHmmssZ-xxxx. Omitted = latest batch of this project.'
+    },
+    target: {
+      type: 'string',
+      enum: [...TARGETS],
+      default: 'user',
+      description: 'Handoff root to read: user = $DSH_HOME/handoff (default), workspace = <workspace>/.dsh/handoff.'
+    },
+    verifyFirst: {
+      type: 'boolean',
+      default: true,
+      description:
+        'When true (default) recompute artifact/source hashes and git drift before reporting trust. ' +
+        'When false the load is skipped-verification and can only report trust=stale.'
+    },
+    include: {
+      type: 'string',
+      enum: [...LOAD_INCLUDE_MODES],
+      default: 'summary',
+      description:
+        'summary = trust + pointers only (default); sections = bounded H0-H9 excerpts; ' +
+        'full = inline HANDOFF.md up to the byte cap.'
+    }
+  }
+})
+
+/**
+ * Canonical `handoff_load` output. Same enforced-subset constraints as the
+ * handoff_pack output schema; optional keys are omitted rather than null.
+ */
+export const LOAD_OUTPUT_SCHEMA = Object.freeze({
+  type: 'object',
+  additionalProperties: false,
+  required: ['ok', 'batchId', 'dir', 'displayDir', 'trust', 'handoff', 'manifest', 'pointers', 'next', 'warnings'],
+  properties: {
+    ok: { type: 'boolean' },
+    batchId: { type: 'string' },
+    dir: { type: 'string', description: 'Tokenized batch directory.' },
+    displayDir: { type: 'string' },
+    trust: { type: 'string', enum: [...TRUST_LEVELS] },
+    verification: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['ok', 'batchId', 'dir', 'checkedAt', 'findings', 'drift', 'counts'],
+      properties: {
+        ok: { type: 'boolean' },
+        batchId: { type: 'string' },
+        dir: { type: 'string' },
+        checkedAt: { type: 'string' },
+        findings: { type: 'array', items: FINDING_SCHEMA },
+        drift: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['gitHeadChanged', 'sourceFilesChanged', 'sourceFilesMissing', 'artifactsChecked'],
+          properties: {
+            gitHeadChanged: { type: 'boolean' },
+            sourceFilesChanged: { type: 'integer' },
+            sourceFilesMissing: { type: 'integer' },
+            artifactsChecked: { type: 'integer' }
+          }
+        },
+        counts: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['errors', 'warnings'],
+          properties: {
+            errors: { type: 'integer' },
+            warnings: { type: 'integer' }
+          }
+        }
+      }
+    },
+    handoff: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['path'],
+      properties: {
+        path: { type: 'string' },
+        truncated: { type: 'boolean' },
+        excerpt: { type: 'string' },
+        sections: {
+          type: 'array',
+          items: {
+            type: 'object',
+            additionalProperties: false,
+            required: ['id', 'heading', 'text'],
+            properties: {
+              id: { type: 'string' },
+              heading: { type: 'string' },
+              text: { type: 'string' },
+              truncated: { type: 'boolean' }
+            }
+          }
+        }
+      }
+    },
+    manifest: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['path'],
+      properties: {
+        path: { type: 'string' },
+        batchId: { type: 'string' },
+        createdAt: { type: 'string' },
+        gitHead: nullableString(),
+        title: nullableString()
+      }
+    },
+    pointers: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['label', 'path'],
+        properties: {
+          label: { type: 'string' },
+          path: { type: 'string' }
+        }
+      }
+    },
+    next: { type: 'array', items: { type: 'string' } },
+    warnings: { type: 'array', items: WARNING_SCHEMA }
+  }
+})
+
+/**
+ * Validate and normalize `handoff_load` arguments.
+ * @param {unknown} raw
+ * @returns {{batchId: string|undefined, target: string, verifyFirst: boolean, include: string}}
+ * @throws {Error & {code: string}} `HANDOFF_INVALID_ARGS`.
+ */
+export function validateLoadArgs(raw) {
+  if (raw === undefined) raw = {}
+  if (!isPlainObject(raw)) throw invalid('arguments must be a JSON object')
+  const known = new Set(Object.keys(LOAD_ARGUMENTS_SCHEMA.properties))
+  for (const key of Object.keys(raw)) {
+    if (!known.has(key)) throw invalid(`unknown argument "${key}"`)
+  }
+  const batchId = consumeString(raw, 'batchId', 40)
+  if (batchId !== undefined && !BATCH_ID_RE.test(batchId))
+    throw invalid('batchId must match YYYYMMDDTHHmmssZ-xxxx (lower-case hex suffix)')
+  const target = raw.target === undefined ? 'user' : raw.target
+  if (typeof target !== 'string' || !TARGETS.includes(target))
+    throw invalid(`target must be one of ${TARGETS.join(', ')}`)
+  const include = raw.include === undefined ? 'summary' : raw.include
+  if (typeof include !== 'string' || !LOAD_INCLUDE_MODES.includes(include))
+    throw invalid(`include must be one of ${LOAD_INCLUDE_MODES.join(', ')}`)
+  return {
+    batchId,
+    target,
+    verifyFirst: consumeBoolean(raw, 'verifyFirst', true),
+    include
+  }
+}
 
 /** The `limits` block returned to the model. */
 export function publicLimits() {

@@ -1,8 +1,9 @@
 /**
  * dsh-handoff-kit bundle entry (host-only, no Client half).
  *
- * Registers exactly three capabilities inside one Cordis lifetime:
+ * Registers the bundle's capabilities inside one Cordis lifetime:
  *   - the `handoff_pack` tool (scan/create/verify/list),
+ *   - the `handoff_load` tool (read-only consumption: trust verdict + drift + pointers),
  *   - the `/handoff` human command,
  *   - the bundled `handoff-pack` skill provider.
  *
@@ -18,7 +19,7 @@ import { join } from 'node:path'
 
 import { PLUGIN_NAME, detectDshVersion } from './src/contracts.js'
 import { createService } from './src/service.js'
-import { createTool } from './src/tool.js'
+import { createLoadTool, createTool } from './src/tool.js'
 import { createCommand } from './src/command.js'
 import { createSkillProvider } from './src/skill.js'
 
@@ -75,6 +76,7 @@ export function apply(ctx) {
     platform: process.platform
   })
   ctx.effect(() => ctx.tools.register(createTool(service)))
+  ctx.effect(() => ctx.tools.register(createLoadTool(service)))
   ctx.effect(() => ctx.commands.register(createCommand(service)))
   ctx.effect(() => ctx.skills.registerProvider(createSkillProvider()))
 }

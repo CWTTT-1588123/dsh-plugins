@@ -14,13 +14,17 @@ import {
   errorCodeOf,
   errorMessageOf,
   handoffError,
+  validateLoadArgs,
   validateToolArgs
 } from './contracts.js'
 
 /** Input hint shown by the slash-command palette. */
-export const COMMAND_DESCRIPTION = '生成/校验会话交接包（HANDOFF.md + manifest.json）'
+export const COMMAND_DESCRIPTION = '生成/校验/消费会话交接包（HANDOFF.md + manifest.json）'
 export const COMMAND_HINT =
-  '[create|scan|verify|list] [--target user|workspace] [--title TEXT] [--batch ID] [--force]'
+  '[create|scan|verify|list|resume] [--target user|workspace] [--title TEXT] [--batch ID] [--force] [--include summary|sections|full] [--no-verify]'
+
+/** Command-only actions on top of the tool actions. */
+const COMMAND_ACTIONS = [...ACTIONS, 'resume']
 
 /** Tokenize a command line, honoring double quotes. */
 function tokenize(rawInput) {
@@ -32,13 +36,15 @@ function tokenize(rawInput) {
 const VALUED_FLAGS = new Map([
   ['--target', 'target'],
   ['--title', 'title'],
-  ['--batch', 'batchId']
+  ['--batch', 'batchId'],
+  ['--include', 'include']
 ])
 /** Boolean flags. */
 const FLAGS = new Map([
   ['--force', 'force'],
   ['--all', 'all'],
-  ['--copy-files', 'copyFiles']
+  ['--copy-files', 'copyFiles'],
+  ['--no-verify', 'noVerify']
 ])
 
 /**
@@ -72,18 +78,29 @@ export function parseCommandInput(rawInput) {
   }
   if (positional.length > 0) {
     const first = positional.shift()
-    if (ACTIONS.includes(first)) action = first
+    if (COMMAND_ACTIONS.includes(first)) action = first
     else if (!first.startsWith('-')) {
       raw.batchId = first
       action = 'verify'
     }
   }
   if (positional.length > 0) {
-    if (action === 'verify' && raw.batchId === undefined) raw.batchId = positional.shift()
+    if ((action === 'verify' || action === 'resume') && raw.batchId === undefined)
+      raw.batchId = positional.shift()
     if (positional.length > 0)
       throw handoffError(ERROR.INVALID_ARGS, `多余的参数：${positional.join(' ')}`)
   }
   raw.action = action ?? 'create'
+  if (raw.action === 'resume') {
+    if (raw.title !== undefined || raw.force !== undefined || raw.all !== undefined || raw.copyFiles !== undefined)
+      throw handoffError(ERROR.INVALID_ARGS, '--title/--force/--all/--copy-files 不适用于 resume')
+    if (raw.noVerify === true) raw.verifyFirst = false
+    delete raw.noVerify
+  } else if (raw.include !== undefined) {
+    throw handoffError(ERROR.INVALID_ARGS, '--include 仅适用于 resume')
+  } else if (raw.noVerify !== undefined) {
+    throw handoffError(ERROR.INVALID_ARGS, '--no-verify 仅适用于 resume')
+  }
   return raw
 }
 
@@ -152,6 +169,7 @@ const REMEDIES = {
   [ERROR.PATH_ESCAPE]: '只接受工作区内相对路径：不能含 ..、盘符、UNC 或经 symlink 逃逸。',
   [ERROR.BATCH_EXISTS]: '该批次已存在：换一个批次（重跑 create）或加 --force 覆盖。',
   [ERROR.BATCH_NOT_FOUND]: '找不到批次：先 /handoff list 查看 batchId，再 /handoff verify <batchId>。',
+  [ERROR.RESUME_NOT_FOUND]: '找不到可加载的批次：先 /handoff list（或 handoff_pack action=list）确认 batchId/target；必要时先 create。',
   [ERROR.MANIFEST_MISSING]: '批次缺少 manifest.json（不完整）：不要采信；可重跑 create --force。',
   [ERROR.MANIFEST_INVALID]: 'manifest.json 无法解析/校验：批次已损坏，不要采信；重新生成。',
   [ERROR.SECRET_CHECK_FAILED]: '终检发现密钥残留：整批已放弃写入，请缩小 files 范围或先清理敏感内容。',
@@ -172,9 +190,42 @@ export function formatError(error) {
   return `[${code}] ${message}\n修法：${remedy}`
 }
 
+/** Chinese labels for the `handoff_load` trust verdict. */
+const TRUST_LABELS = {
+  verified: '可信（校验通过，0 error / 0 warning）',
+  stale: '需复核（已漂移或有 warning）',
+  invalid: '不可信（校验存在 error）'
+}
+
+/**
+ * Render a `handoff_load` result as the Chinese command text.
+ * @param {Record<string, any>} result
+ * @returns {string}
+ */
+export function formatLoadResult(result) {
+  const label = TRUST_LABELS[result.trust] ?? String(result.trust)
+  const verification = result.verification
+  const counts =
+    verification === undefined || verification === null
+      ? '未校验（--no-verify）'
+      : `${verification.counts.errors} errors / ${verification.counts.warnings} warnings`
+  const findings = (verification?.findings ?? [])
+    .slice(0, 4)
+    .map((finding) => `${finding.severity === 'error' ? '✗' : '!'} ${finding.code}${finding.path === undefined ? '' : ` (${finding.path})`}`)
+    .join('；')
+  const next = (result.next ?? []).slice(0, 2).join('\n- ')
+  return (
+    `交接包 ${result.batchId}：${label}；${counts}。\n` +
+    `目录：${result.displayDir}\n` +
+    (findings === '' ? '' : `发现：${findings}\n`) +
+    `HANDOFF：${result.handoff?.path ?? '(missing)'}\n` +
+    (next === '' ? '' : `下一步：- ${next}`)
+  )
+}
+
 /**
  * Build the registry-ready command definition.
- * @param {{run: Function}} service
+ * @param {{run: Function, load: Function}} service
  */
 export function createCommand(service) {
   return {
@@ -184,6 +235,19 @@ export function createCommand(service) {
     async handler(invocation) {
       try {
         const raw = parseCommandInput(invocation.rawInput)
+        if (raw.action === 'resume') {
+          const loadArgs = validateLoadArgs({
+            batchId: raw.batchId,
+            target: raw.target,
+            verifyFirst: raw.verifyFirst,
+            include: raw.include
+          })
+          const result = await service.load(loadArgs, {
+            agent: invocation.agent,
+            signal: invocation.signal
+          })
+          return { kind: 'success', text: formatLoadResult(result) }
+        }
         const args = validateToolArgs(raw)
         const result = await service.run(args, {
           agent: invocation.agent,
