@@ -115,6 +115,7 @@ const RESULT_KEY_ORDER = [
   'scan',
   'changes',
   'lineage',
+  'migration',
   'preview',
   'verification',
   'batches',
@@ -1025,6 +1026,195 @@ export function createService({
     })
   }
 
+  /** Build `evidence/migration.json` for a v1 -> v2 migration. */
+  function buildMigrationEvidence(provenance) {
+    return {
+      path: `${EVIDENCE_DIR}/migration.json`,
+      content: jsonText({ schemaVersion: SCHEMA_VERSION, migration: provenance })
+    }
+  }
+
+  /**
+   * Migration (P3/M2): read-only schemaVersion 1 source batch -> NEW
+   * schemaVersion 2 batch in the same project directory.
+   *
+   * The source batch is never written: its manifest is parsed but not re-saved,
+   * and every write goes under the new batch directory. Provenance (source id,
+   * source SHA256SUMS digest, timestamps, tool identity) is recorded in
+   * `evidence/migration.json`, which is itself listed in manifest.artifacts and
+   * SHA256SUMS. v2-only evidence blocks are marked `available:false` instead of
+   * being invented; the source block is verified clean before migrating.
+   */
+  async function runMigrate(args, exec) {
+    const context = await resolveContext(exec)
+    const io = ioFor(exec?.signal)
+    const root = handoffRootFor(args.target, context)
+    const projectInfo = await resolveProject(context, io)
+    const located = await locateBatch({
+      args: { batchId: args.batchId },
+      root,
+      projectKeyName: projectInfo.project.key,
+      io
+    })
+
+    // A package that cannot be verified must not be migrated: the migration
+    // would launder an untrusted batch into a "new" one.
+    const sourceVerification = await runVerify(
+      { action: 'verify', batchId: located.batchId, target: args.target },
+      exec
+    )
+    if (sourceVerification.verification.counts.errors > 0) {
+      const codes = [
+        ...new Set(
+          sourceVerification.verification.findings
+            .filter((finding) => finding.severity === 'error')
+            .map((finding) => finding.code)
+        )
+      ].join(', ')
+      throw handoffError(
+        ERROR.MIGRATION_SOURCE_INVALID,
+        `source batch ${located.batchId} failed verification (${sourceVerification.verification.counts.errors} error findings: ${codes}); fix or regenerate it before migrating`
+      )
+    }
+
+    const source = parseManifest(await io.readText(join(located.dir, MANIFEST_FILE)))
+    if (source.schemaVersion !== SCHEMA_VERSION) {
+      throw handoffError(
+        ERROR.MIGRATION_UNSUPPORTED_VERSION,
+        `source batch ${located.batchId} is schemaVersion ${String(source.schemaVersion)}; migrate upgrades schemaVersion 1 to 2 only`
+      )
+    }
+    const sourceSumsText = await io.readText(join(located.dir, SUMS_FILE))
+    const migratedAt = now().toISOString()
+    const batchId = makeBatchId({ date: new Date(migratedAt), suffix: randomSuffix() })
+    const batchDir = join(root, projectInfo.project.key, batchId)
+    await assertBatchCreatable({ fs: ctx.fs, rootDir: batchDir, force: false })
+
+    const provenance = {
+      fromBatchId: located.batchId,
+      fromSchemaVersion: source.schemaVersion,
+      sourceSha256Sums: sha256Hex(sourceSumsText),
+      sourceGenerator: isPlainObject(source.generator) ? source.generator : null,
+      migratedAt,
+      tool: generatorIdentity({ dshVersion, platform })
+    }
+    const warnings = mergeWarnings([
+      ...(Array.isArray(source.warnings) ? source.warnings : []),
+      {
+        code: 'MIGRATED_FROM_V1',
+        detail:
+          `migrated from ${located.batchId} (schemaVersion 1); host workspaceChanges/goal/jobs ` +
+          'evidence of the original session is unavailable and marked available:false'
+      }
+    ])
+    const manifest = createManifest({
+      batchId,
+      createdAt: migratedAt,
+      target: args.target,
+      schemaVersion: SCHEMA_VERSION_V2,
+      generator: generatorIdentity({ dshVersion, platform }),
+      project: source.project,
+      session: source.session,
+      sandbox: source.sandbox,
+      inputs: source.inputs,
+      git: source.git,
+      files: source.files,
+      sessionTrace: source.sessionTrace,
+      redactions: source.redactions,
+      warnings,
+      limits: publicLimits(),
+      scan: source.scan,
+      changes: {
+        available: false,
+        note: 'migrated from schemaVersion 1: host workspaceChanges evidence for the original session is unavailable',
+        collectedAt: migratedAt
+      },
+      fuel: {
+        goals: { available: false, note: 'migrated from schemaVersion 1: goal snapshot unavailable' },
+        jobs: { available: false, note: 'migrated from schemaVersion 1: jobs snapshot unavailable' }
+      }
+    })
+
+    const ledger = createRedactionLedger()
+    const handoff = redactText(renderHandoff(manifest))
+    ledger.add(HANDOFF_FILE, handoff.hits)
+    const evidenceTexts = buildEvidenceTexts(manifest).map((entry) => {
+      const redacted = redactText(entry.content)
+      ledger.add(entry.path, redacted.hits)
+      return { path: entry.path, content: redacted.text }
+    })
+    const migrationEvidence = buildMigrationEvidence(provenance)
+    const redactedMigration = redactText(migrationEvidence.content)
+    ledger.add(migrationEvidence.path, redactedMigration.hits)
+
+    const covered = orderEntries([
+      { path: HANDOFF_FILE, content: handoff.text },
+      ...evidenceTexts,
+      { path: migrationEvidence.path, content: redactedMigration.text }
+    ])
+    const coveredArtifacts = covered.map((entry) => artifactEntry(entry.path, entry.content))
+    const sumsText = buildSha256Sums(coveredArtifacts)
+    const finalArtifacts = sortArtifacts([...coveredArtifacts, artifactEntry(SUMS_FILE, sumsText)])
+    const finalManifest = setArtifacts(manifest, finalArtifacts)
+    const manifestText = serializeManifest(finalManifest)
+    const entries = orderEntries([
+      ...covered,
+      { path: SUMS_FILE, content: sumsText },
+      { path: MANIFEST_FILE, content: manifestText }
+    ])
+    guardFinalSecrets([
+      [HANDOFF_FILE, handoff.text],
+      ...evidenceTexts.map((entry) => [entry.path, entry.content]),
+      [migrationEvidence.path, redactedMigration.text],
+      [SUMS_FILE, sumsText],
+      [MANIFEST_FILE, manifestText]
+    ])
+    await writeBatch({
+      fs: ctx.fs,
+      policy: context.policy,
+      rootDir: batchDir,
+      entries,
+      signal: exec?.signal,
+      force: false
+    })
+
+    const artifactBytes = finalArtifacts.reduce(
+      (sum, artifact) => sum + (Number.isFinite(artifact.bytes) ? artifact.bytes : 0),
+      0
+    )
+    const dirToken = tokenizePath(batchDir, context.contexts)
+    return finish({
+      action: 'migrate',
+      dir: dirToken,
+      displayDir: await displayOf(batchDir),
+      project: projectInfo.project,
+      batchId,
+      git: gitSummary(source.git),
+      artifacts: finalArtifacts,
+      totals: totalsOf({
+        files: (source.files ?? []).length,
+        artifacts: finalArtifacts.length,
+        artifactBytes,
+        redactions: ledger.count(),
+        warnings: warnings.length
+      }),
+      redactions: ledger.list(),
+      warnings,
+      migration: {
+        fromBatchId: provenance.fromBatchId,
+        fromSchemaVersion: provenance.fromSchemaVersion,
+        sourceSha256Sums: provenance.sourceSha256Sums,
+        migratedAt: provenance.migratedAt
+      },
+      next: [
+        'read the new HANDOFF.md and compare it with the source batch if needed',
+        `handoff_pack action=verify batchId=${batchId}`,
+        `handoff_load batchId=${batchId}`
+      ],
+      limits: publicLimits()
+    })
+  }
+
   function sortFindings(findings) {
     const severityRank = (finding) => (finding.severity === 'error' ? 0 : 1)
     return [...findings].sort((left, right) => {
@@ -1636,6 +1826,8 @@ export function createService({
         return runCreate(args, exec)
       case 'verify':
         return runVerify(args, exec)
+      case 'migrate':
+        return runMigrate(args, exec)
       case 'list':
         return runList(args, exec)
       default:

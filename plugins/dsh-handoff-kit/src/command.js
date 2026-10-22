@@ -21,7 +21,7 @@ import {
 /** Input hint shown by the slash-command palette. */
 export const COMMAND_DESCRIPTION = '生成/校验/消费会话交接包（HANDOFF.md + manifest.json）'
 export const COMMAND_HINT =
-  '[create|append|update|scan|verify|list|resume] [--target user|workspace] [--title TEXT] [--batch ID] [--previous ID] [--supersedes ID] [--force] [--include-diffs] [--include summary|sections|full] [--no-verify]'
+  '[create|append|update|scan|verify|list|migrate|resume] [--target user|workspace] [--title TEXT] [--batch ID] [--previous ID] [--supersedes ID] [--force] [--include-diffs] [--include summary|sections|full] [--no-verify]'
 
 /** Command-only actions on top of the tool actions. */
 const COMMAND_ACTIONS = [...ACTIONS, 'resume']
@@ -88,7 +88,7 @@ export function parseCommandInput(rawInput) {
     }
   }
   if (positional.length > 0) {
-    if ((action === 'verify' || action === 'resume') && raw.batchId === undefined)
+    if ((action === 'verify' || action === 'resume' || action === 'migrate') && raw.batchId === undefined)
       raw.batchId = positional.shift()
     if (positional.length > 0)
       throw handoffError(ERROR.INVALID_ARGS, `多余的参数：${positional.join(' ')}`)
@@ -174,6 +174,18 @@ export function formatResult(result) {
         .join('\n')
       return `交接批次 ${batches.length} 个：\n${rows === '' ? '（无）' : rows}`
     }
+    case 'migrate': {
+      const sourceSums = typeof result.migration?.sourceSha256Sums === 'string'
+        ? `${result.migration.sourceSha256Sums.slice(0, 12)}…`
+        : '(unknown)'
+      return (
+        `交接包已迁移（schemaVersion ${result.migration?.fromSchemaVersion ?? '?'} → 2）：` +
+        `源 ${result.migration?.fromBatchId ?? '?'} → 新批次 ${result.batchId}\n` +
+        `目录：${result.displayDir ?? result.dir}\n` +
+        `源 SHA256SUMS 哈希：${sourceSums}（源批次未被修改）；${result.artifacts?.length ?? 0} 个产物。\n` +
+        `下一步：handoff_load batchId=${result.batchId} 复核新批次。`
+      )
+    }
     default:
       return `handoff_pack ${String(result.action)} 完成。`
   }
@@ -190,6 +202,8 @@ const REMEDIES = {
   [ERROR.RESUME_NOT_FOUND]: '找不到可加载的批次：先 /handoff list（或 handoff_pack action=list）确认 batchId/target；必要时先 create。',
   [ERROR.APPEND_TARGET_MISSING]: 'append/update 的目标批次不存在或不可读：先 /handoff list 确认，或先 create 第一版；可用 --previous/--supersedes 显式指定。',
   [ERROR.LINEAGE_CYCLE]: '血缘目标非法（批次不能 append/update 到自身或形成环）：换一个目标批次。',
+  [ERROR.MIGRATION_SOURCE_INVALID]: '源批次校验未通过（存在 error）：不能迁移不可信的包；先修复或重新生成源批次。',
+  [ERROR.MIGRATION_UNSUPPORTED_VERSION]: '迁移只支持 schemaVersion 1 → 2：确认源批次版本（已是 2 的批次无需迁移）。',
   [ERROR.MANIFEST_MISSING]: '批次缺少 manifest.json（不完整）：不要采信；可重跑 create --force。',
   [ERROR.MANIFEST_INVALID]: 'manifest.json 无法解析/校验：批次已损坏，不要采信；重新生成。',
   [ERROR.SECRET_CHECK_FAILED]: '终检发现密钥残留：整批已放弃写入，请缩小 files 范围或先清理敏感内容。',

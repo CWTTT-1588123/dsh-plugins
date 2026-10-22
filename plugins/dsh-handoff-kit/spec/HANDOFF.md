@@ -1,6 +1,6 @@
 # Handoff Package Specification (HANDOFF.md + manifest.json + evidence)
 
-<!-- docs-meta: status=current; phase=P3; verified=a57385a@2026-10-23; tracks=plugins/dsh-handoff-kit/src; supersedes=-; superseded-by=- -->
+<!-- docs-meta: status=current; phase=P3; verified=a57385a@2026-10-23; tracks=-; supersedes=-; superseded-by=- -->
 
 > Status: **1.0 draft (P3/M1, 2026-10-23)** — normative for generated batches; frozen at 1.0.
 > Implemented by `dsh-handoff-kit` (plugin version 0.3.1 at spec start). Machine-readable companion: [`../schema/manifest.v1.json`](../schema/manifest.v1.json), [`../schema/manifest.v2.json`](../schema/manifest.v2.json); verification algorithm: [`verify.md`](verify.md).
@@ -43,6 +43,7 @@ The generator never invents facts. Values the caller did not provide are rendere
     ├── files.json          # workspace scan summary + hashed file list
     ├── session.json        # session tool/call metadata (no message bodies)
     ├── redactions.json     # redaction ledger for this batch
+    ├── migration.json      # optional: v1 -> v2 provenance (written by migrate)
     └── files/              # optional redacted copies (copyFiles=true)
         └── <workspace-relative-path>
 ```
@@ -146,7 +147,7 @@ All evidence JSON files are UTF-8, 2-space indented, newline-terminated, and car
 | `evidence/session.json` | the manifest `sessionTrace` object verbatim. |
 | `evidence/redactions.json` | `{schemaVersion:1, redactions}` — same ledger as the manifest. |
 | `evidence/files/<path>` | optional redacted copies when `copyFiles=true`; at most 20 files, 256 KiB each, 2 MiB total; each copy is redacted before writing and recorded in `redactions`. |
-| `evidence/migration.json` | optional; written by the schema migration tool (M2). Records source batch id, source `SHA256SUMS` digest, migration timestamp, and tool version. |
+| `evidence/migration.json` | optional; written by `migrate`: `{schemaVersion:1, migration:{fromBatchId, fromSchemaVersion, sourceSha256Sums, sourceGenerator, migratedAt, tool{name,version,dshVersion,platform}}}`. Records where a v2 batch came from; the file itself is an artifact (hashed in `SHA256SUMS`). |
 
 **Redaction:** every artifact is redacted and then scanned for secret residue before the batch is written. Placeholders are `«REDACTED:<kind>»` with kinds `private-key-block`, `bearer`, `cloud-key`, `url-credentials`, `conn-string-password`, `env-assignment`, `generic-assignment`. Built-in rules may be extended by an optional policy but can never be disabled. A residue found after redaction aborts the whole batch (`HANDOFF_SECRET_CHECK_FAILED`).
 
@@ -168,6 +169,20 @@ Verification produces findings (severity `error`/`warn`) and drift counts; consu
 - `manifest.schemaVersion` is the machine contract version; the current writer emits `2`. v1 manifests remain **read-only compatible**: they can be verified/loaded; they cannot express `changes`/`fuel`/`lineage`.
 - A new schema block (e.g., signature or policy provenance) requires `schemaVersion 3` **and** a migration tool shipped in the same release. A schema version must never be silently extended.
 - Manifest key order and `SHA256SUMS` format are frozen for v2; additional tool output fields are additive.
+
+### 10.1 Migration (v1 → v2)
+
+`migrate` upgrades a `schemaVersion 1` batch to `schemaVersion 2`:
+
+- the source batch is **read-only**: it must verify without errors, and its bytes must not change;
+- the result is a **new batch** (new batch id, same project key) with `evidence/migration.json`
+  provenance — history is never rewritten;
+- v2-only evidence the source never captured (`changes`, `fuel`) is recorded as
+  `available:false` with a `MIGRATED_FROM_V1` warning; it is never invented;
+- no `lineage` block is created (migration is a format upgrade, not a continuation — use
+  `append`/`update` for continuation);
+- migration is deterministic apart from the new batch id/timestamp and the tool identity it
+  records.
 - Human/spec version follows the plugin version (`1.0.x` for the 1.0 line).
 
 ## 11. Security and privacy notes

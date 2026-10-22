@@ -57,6 +57,14 @@ export function summarizeResult(value) {
         )
       lines.push(`verify with handoff_pack action=verify batchId=${value.batchId ?? ''}`)
       break
+    case 'migrate':
+      lines.push(
+        `migrated ${value.migration?.fromBatchId ?? '(unknown source)'} -> ${value.batchId ?? 'batch'} ` +
+          `at ${value.displayDir ?? value.dir ?? '(unknown dir)'} ` +
+          `(${value.artifacts?.length ?? 0} artifacts, source untouched)`
+      )
+      lines.push(`verify with handoff_pack action=verify batchId=${value.batchId ?? ''}`)
+      break
     case 'verify':
       lines.push(
         `verify ${value.verification?.batchId ?? value.batchId ?? ''}: ` +
@@ -92,7 +100,7 @@ export function createTool(service) {
     timeoutMs: TOOL_TIMEOUT_MS,
     // Reads may run together; batch-writing actions are exclusive.
     isConcurrencySafe(args) {
-      return !['create', 'append', 'update'].includes(args?.action)
+      return !['create', 'append', 'update', 'migrate'].includes(args?.action)
     },
     async execute(rawArgs, exec) {
       const args = validateToolArgs(rawArgs)

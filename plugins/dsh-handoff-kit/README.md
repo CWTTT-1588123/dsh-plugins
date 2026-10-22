@@ -15,9 +15,9 @@ no external network, no subprocess.
 
 | Surface | Name | Purpose |
 |---|---|---|
-| Tool | `handoff_pack` | `scan` / `create` / `verify` / `list` / `append` / `update` handoff packages |
+| Tool | `handoff_pack` | `scan` / `create` / `verify` / `list` / `append` / `update` / `migrate` handoff packages |
 | Tool | `handoff_load` | Read-only consumption: verify + trust verdict + drift + pointers (P1/M1) |
-| Command | `/handoff` | Human shortcut: create (default), append, update, scan, verify, list, resume |
+| Command | `/handoff` | Human shortcut: create (default), append, update, scan, verify, list, migrate, resume |
 | Skill | `handoff-pack` | When and how to generate / consume a handoff package |
 | UI (P2) | 「交接」按钮 / 浮层面板 / 工作台 | 生成、载入、复制新会话开场提示词、继续交接（同包 Client half + 宿主 `/api` RPC） |
 
@@ -122,6 +122,27 @@ history). `create/append/update` also capture read-only P1 evidence when availab
 
 Both degrade to `available:false` + warning when the service/data is missing. `manifest.schemaVersion`
 becomes `2`; v1 manifests remain readable/verifiable.
+
+## Schema migration (P3/M2)
+
+`migrate` upgrades a legacy `schemaVersion 1` batch to `schemaVersion 2` by writing a **new**
+batch; the source batch stays read-only and byte-identical:
+
+```text
+handoff_pack action=migrate batchId=<v1-batch>     # tool
+/handoff migrate <v1-batch>                        # command shortcut
+```
+
+- the source must verify without errors (`HANDOFF_MIGRATION_SOURCE_INVALID` otherwise): a package
+  that cannot be trusted is never laundered into a "new" one;
+- only v1 -> v2 is supported (`HANDOFF_MIGRATION_UNSUPPORTED_VERSION` for already-v2 batches);
+- `evidence/migration.json` records the source batch id, source `SHA256SUMS` digest, source
+  generator, migration timestamp and tool identity; it is listed in `manifest.artifacts` /
+  `SHA256SUMS` like every other artifact;
+- v2-only evidence the original session never captured (`changes` / `fuel`) is recorded as
+  `available:false` with a `MIGRATED_FROM_V1` warning — never invented;
+- no `lineage` is created: migration is a format upgrade, not a continuation (use `append` for
+  continuation).
 
 ## Consume (P1/M1)
 

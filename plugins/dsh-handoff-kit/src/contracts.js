@@ -37,8 +37,8 @@ export const MANIFEST_FILE = 'manifest.json'
 export const EVIDENCE_DIR = 'evidence'
 export const EVIDENCE_FILES_DIR = 'evidence/files'
 
-/** The four tool actions, in a stable order (append/update are P1/M2 additions). */
-export const ACTIONS = Object.freeze(['scan', 'create', 'verify', 'list', 'append', 'update'])
+/** The tool actions, in a stable order (append/update are P1/M2 additions; migrate is P3/M2). */
+export const ACTIONS = Object.freeze(['scan', 'create', 'verify', 'list', 'append', 'update', 'migrate'])
 /** Output targets. `user` is the default; `workspace` is the explicit downgrade. */
 export const TARGETS = Object.freeze(['user', 'workspace'])
 /** Target directory suffixes under each root. */
@@ -70,6 +70,8 @@ export const ERROR = Object.freeze({
   VERIFY_INVALID: 'HANDOFF_VERIFY_INVALID',
   APPEND_TARGET_MISSING: 'HANDOFF_APPEND_TARGET_MISSING',
   LINEAGE_CYCLE: 'HANDOFF_LINEAGE_CYCLE',
+  MIGRATION_SOURCE_INVALID: 'HANDOFF_MIGRATION_SOURCE_INVALID',
+  MIGRATION_UNSUPPORTED_VERSION: 'HANDOFF_MIGRATION_UNSUPPORTED_VERSION',
   MANIFEST_MISSING: 'HANDOFF_MANIFEST_MISSING',
   MANIFEST_INVALID: 'HANDOFF_MANIFEST_INVALID',
   WRITE_FAILED: 'HANDOFF_WRITE_FAILED',
@@ -141,11 +143,12 @@ export const TOOL_TIMEOUT_MS = LIMITS.toolTimeoutMs
 
 /** Tool description shown to the model (English, per ADR decision 10). */
 export const TOOL_DESCRIPTION =
-  'Create, scan, verify, list, append, or update deterministic session handoff packages ' +
+  'Create, scan, verify, list, append, update, or migrate deterministic session handoff packages ' +
   '(HANDOFF.md + manifest.json) for the current workspace. Use before ending a long ' +
   'session or handing work to a new session; append/update create a new batch linked to the ' +
-  'previous one (append-only, never rewriting history). A new session should call handoff_load ' +
-  '(or verify) before trusting a package.'
+  'previous one (append-only, never rewriting history). migrate upgrades a schemaVersion 1 batch ' +
+  'to schemaVersion 2 by writing a NEW batch (the source stays read-only). A new session should ' +
+  'call handoff_load (or verify) before trusting a package.'
 
 /** A scalar that may be absent as `null` when a file captured it that way. */
 const nullableString = () => ({ oneOf: [{ type: 'string' }, { type: 'null' }] })
@@ -337,6 +340,17 @@ export const TOOL_OUTPUT_SCHEMA = Object.freeze({
         supersedes: nullableString()
       }
     },
+    migration: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['fromBatchId', 'fromSchemaVersion', 'sourceSha256Sums', 'migratedAt'],
+      properties: {
+        fromBatchId: { type: 'string' },
+        fromSchemaVersion: { type: 'integer' },
+        sourceSha256Sums: { type: 'string' },
+        migratedAt: { type: 'string' }
+      }
+    },
     preview: {
       type: 'object',
       additionalProperties: false,
@@ -425,7 +439,8 @@ export const TOOL_ARGUMENTS_SCHEMA = Object.freeze({
       enum: [...ACTIONS],
       description:
         'scan = collect evidence and preview without writing; create = write a batch; ' +
-        'verify = read-only hash/drift check of one batch; list = read-only batch listing.'
+        'verify = read-only hash/drift check of one batch; list = read-only batch listing; ' +
+        'migrate = read-only schemaVersion 1 source -> new schemaVersion 2 batch.'
     },
     target: {
       type: 'string',
@@ -483,7 +498,7 @@ export const TOOL_ARGUMENTS_SCHEMA = Object.freeze({
     batchId: {
       type: 'string',
       description:
-        'verify/list locator: YYYYMMDDTHHmmssZ-xxxx. Omitted = latest batch of this project.'
+        'verify/list/migrate locator: YYYYMMDDTHHmmssZ-xxxx. Omitted = latest batch of this project (migrate requires it).'
     },
     all: {
       type: 'boolean',
@@ -819,8 +834,10 @@ export function validateToolArgs(raw) {
   const batchId = consumeString(raw, 'batchId', 40)
   if (batchId !== undefined && !BATCH_ID_RE.test(batchId))
     throw invalid('batchId must match YYYYMMDDTHHmmssZ-xxxx (lower-case hex suffix)')
-  if (action !== 'verify' && action !== 'list' && batchId !== undefined)
-    throw invalid('batchId is only valid for verify and list')
+  if (!['verify', 'list', 'migrate'].includes(action) && batchId !== undefined)
+    throw invalid('batchId is only valid for verify, list and migrate')
+  if (action === 'migrate' && batchId === undefined)
+    throw invalid('migrate requires an explicit batchId (the schemaVersion 1 source batch)')
   const previousBatchId = consumeString(raw, 'previousBatchId', 40)
   if (previousBatchId !== undefined && !BATCH_ID_RE.test(previousBatchId))
     throw invalid('previousBatchId must match YYYYMMDDTHHmmssZ-xxxx')

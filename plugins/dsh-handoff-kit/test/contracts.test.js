@@ -43,7 +43,7 @@ test('package metadata matches the contracts version and bundle marker', () => {
 
 test('tool identity is stable', () => {
   assert.equal(TOOL_NAME, 'handoff_pack')
-  assert.deepEqual([...ACTIONS], ['scan', 'create', 'verify', 'list', 'append', 'update'])
+  assert.deepEqual([...ACTIONS], ['scan', 'create', 'verify', 'list', 'append', 'update', 'migrate'])
   assert.deepEqual([...TARGETS], ['user', 'workspace'])
   assert.equal(SCHEMA_VERSION, 1)
   assert.equal(typeof TOOL_DESCRIPTION, 'string')
@@ -56,7 +56,7 @@ test('argument schema belongs to the enforced JSON Schema subset', () => {
   assert.equal(TOOL_ARGUMENTS_SCHEMA.type, 'object')
   assert.equal(TOOL_ARGUMENTS_SCHEMA.additionalProperties, false)
   assert.deepEqual(TOOL_ARGUMENTS_SCHEMA.required, ['action'])
-  assert.deepEqual(TOOL_ARGUMENTS_SCHEMA.properties.action.enum, ['scan', 'create', 'verify', 'list', 'append', 'update'])
+  assert.deepEqual(TOOL_ARGUMENTS_SCHEMA.properties.action.enum, ['scan', 'create', 'verify', 'list', 'append', 'update', 'migrate'])
   assert.deepEqual(TOOL_ARGUMENTS_SCHEMA.properties.target.enum, ['user', 'workspace'])
 })
 
