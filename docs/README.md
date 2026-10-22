@@ -1,6 +1,6 @@
 # dsh-plugins 文档索引（唯一入口）
 
-<!-- docs-meta: status=current; phase=cross; verified=42fdf57@2026-10-22; tracks=-; supersedes=-; superseded-by=- -->
+<!-- docs-meta: status=current; phase=cross; verified=c5fe455@2026-10-22; tracks=-; supersedes=-; superseded-by=- -->
 
 > 状态：**current**（2026-10-22 建立，D1）
 > 读者：用户 + 所有 AI 会话
@@ -29,7 +29,7 @@
 ## 3. 文档头模板（复制到每份 Markdown 标题后）
 
 ```html
-<!-- docs-meta: status=current; phase=P2; verified=42fdf57@2026-10-22; tracks=plugins/dsh-handoff-kit/src,docs; supersedes=-; superseded-by=- -->
+<!-- docs-meta: status=current; phase=P2; verified=c5fe455@2026-10-22; tracks=plugins/dsh-handoff-kit/src,docs; supersedes=-; superseded-by=- -->
 ```
 
 - `current`/`frozen` 必须带 `verified`；`superseded`/`historical` 必须有 `superseded-by` 或位于 `docs/archive/`；

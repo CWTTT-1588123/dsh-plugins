@@ -1,6 +1,6 @@
 # dsh-plugins
 
-<!-- docs-meta: status=current; phase=cross; verified=42fdf57@2026-10-22; tracks=-; supersedes=-; superseded-by=- -->
+<!-- docs-meta: status=current; phase=cross; verified=c5fe455@2026-10-22; tracks=-; supersedes=-; superseded-by=- -->
 
 DeepSeek Harness（DSH）插件独立仓库。与业务项目（如 `D:\repos\stand`）物理分离：
 **插件源码、设计文档、路线图、验收记录全部集中在这里**，业务仓库不再承载插件文件。

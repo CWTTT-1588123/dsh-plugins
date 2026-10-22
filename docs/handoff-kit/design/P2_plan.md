@@ -1,6 +1,6 @@
 # dsh-handoff-kit P2 实施计划——UI 工作台（0.3.x）
 
-<!-- docs-meta: status=frozen; phase=P2; verified=42fdf57@2026-10-22; tracks=plugins/dsh-handoff-kit; supersedes=-; superseded-by=- -->
+<!-- docs-meta: status=frozen; phase=P2; verified=c5fe455@2026-10-22; tracks=plugins/dsh-handoff-kit; supersedes=-; superseded-by=- -->
 
 > 版本：v1（2026-10-22，按 [ADR-0003](../../adr/0003-prompt-first-and-ui.md) 编写）。
 > 对应 [ROADMAP](../../../ROADMAP.md) P2；前置：P0/P1 done（0.2.1）、文档治理 D1–D3 done。
