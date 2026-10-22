@@ -1,6 +1,6 @@
 {
   "name": "dsh-handoff-kit",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
   "description": "Deterministic session handoff packages (HANDOFF.md + manifest.json) for DeepSeek Harness",
   "type": "module",
@@ -21,6 +21,9 @@
     "cordis.patch.yml",
     "README.md"
   ],
+  "scripts": {
+    "test": "node --test \"test/**/*.test.js\""
+  },
   "engines": {
     "dsh": ">=0.2.0 <0.3.0"
   },

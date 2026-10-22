@@ -44,7 +44,18 @@ function changeSummary(overrides = {}) {
 function makeHarness({ mode = 'danger-full-access', services, summary } = {}) {
   const fs = createFixtureFs()
   addGitFixture(fs)
-  const events = [{ type: 'workspace/changes', seq: 10, time: 0, data: { turn: 2 } }]
+  const events = [
+    { type: 'turn/start', seq: 1, data: { turn: 1 } },
+    { type: 'tool/call', seq: 2, data: { turn: 1, name: 'read', arguments: JSON.stringify({ path: 'src/index.js' }) } },
+    { type: 'turn/end', seq: 5, data: { turn: 1 } },
+    { type: 'turn/start', seq: 6, data: { turn: 2 } },
+    { type: 'tool/call', seq: 7, data: { turn: 2, name: 'write', arguments: JSON.stringify({ path: 'docs/design.md' }) } },
+    { type: 'workspace/changes', seq: 10, time: 0, data: { turn: 2 } },
+    { type: 'turn/end', seq: 11, data: { turn: 2 } },
+    { type: 'turn/start', seq: 12, data: { turn: 3 } },
+    { type: 'tool/call', seq: 13, data: { turn: 3, name: 'write', arguments: JSON.stringify({ path: 'src/new.js' }) } },
+    { type: 'tool/call', seq: 14, data: { turn: 3, name: 'read', arguments: JSON.stringify({ path: 'src/new.js' }) } }
+  ]
   const injected = { ...(services ?? {}) }
   if (summary !== undefined) {
     injected.workspaceChanges = {
@@ -113,6 +124,9 @@ test('create with workspaceChanges/goal/jobs writes manifest@2 with P1 blocks an
   assert.equal(manifest.schemaVersion, SCHEMA_VERSION_V2)
   assert.equal(manifest.changes.available, true)
   assert.equal(manifest.changes.files.length, 2)
+  assert.equal(manifest.changes.currentTurn.turn, 3)
+  assert.deepEqual(manifest.changes.currentTurn.files.map((file) => file.path), ['src/new.js'])
+  assert.equal(manifest.changes.currentTurn.files[0].count, 2)
   assert.equal(manifest.fuel.goals.available, true)
   assert.equal(manifest.fuel.goals.goal.id, 'g1')
   assert.equal(manifest.fuel.jobs.available, true)
@@ -122,6 +136,8 @@ test('create with workspaceChanges/goal/jobs writes manifest@2 with P1 blocks an
   const handoff = harness.fs.readFile(`${result.displayDir}\\HANDOFF.md`)
   assert.match(handoff, /### 本会话改动（workspaceChanges，仅已完成 turn）/)
   assert.match(handoff, /已完成 turn 共 2 个文件/)
+  assert.match(handoff, /#### 当前未完成 turn 的触碰（会话 tool\/call，仅路径）/)
+  assert.match(handoff, /`src\/new\.js`/)
   assert.match(handoff, /`\[改动\]`/)
   assert.match(handoff, /workspaceChanges 只覆盖\*\*已完成 turn\*\*/)
 
@@ -160,9 +176,11 @@ test('create without optional services degrades to available:false + warnings (v
   const manifest = readManifest(harness, result)
   assert.equal(manifest.schemaVersion, 2)
   assert.equal(manifest.changes.available, false)
+  assert.equal(manifest.changes.currentTurn.turn, 3)
   assert.equal(validateManifest(manifest).ok, true)
   const handoff = harness.fs.readFile(`${result.displayDir}\\HANDOFF.md`)
   assert.match(handoff, /本会话 workspaceChanges 不可用/)
+  assert.match(handoff, /当前未完成 turn 的触碰/)
 })
 
 test('create includeDiffs captures bounded diff hunks', async () => {

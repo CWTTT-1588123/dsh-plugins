@@ -230,6 +230,22 @@ function renderH1(manifest) {
   }
   lines.push('')
 
+  const currentTurn =
+    changes !== null && isPlainObject(changes.currentTurn) ? changes.currentTurn : null
+  if (currentTurn !== null && Array.isArray(currentTurn.files) && currentTurn.files.length > 0) {
+    lines.push('#### 当前未完成 turn 的触碰（会话 tool/call，仅路径）', '')
+    lines.push(
+      `- ${stringOf(currentTurn.note) ?? '仅路径与计数'}（turn ${integerOf(currentTurn.turn) ?? MISSING}）`
+    )
+    for (const file of currentTurn.files.slice(0, 10)) {
+      lines.push(
+        `- \`${stringOf(file.path) ?? MISSING}\` — 工具：${codeInline(file.tool)}；` +
+          `次数：${integerOf(file.count) ?? MISSING}；lastSeq：${integerOf(file.lastSeq) ?? MISSING}`
+      )
+    }
+    lines.push('')
+  }
+
   lines.push('### 会话触碰的文件（按 lastSeq 降序，最多 15 条）', '')
   const touchedFiles = Array.isArray(trace.touchedFiles)
     ? trace.touchedFiles.filter((entry) => isPlainObject(entry))
@@ -399,6 +415,21 @@ function buildAssertions(manifest) {
     assertions.push({
       label: '待验',
       text: `本会话 workspaceChanges 不可用（${stringOf(changes?.note) ?? '原因见 H6 warnings'}），不产出“本会话改动”断言。`
+    })
+  }
+  const currentTurn =
+    changes !== null && isPlainObject(changes.currentTurn) ? changes.currentTurn : null
+  if (currentTurn !== null && Array.isArray(currentTurn.files) && currentTurn.files.length > 0) {
+    const sample = currentTurn.files
+      .slice(0, 5)
+      .map((file) => `\`${stringOf(file.path) ?? MISSING}\`（${stringOf(file.tool) ?? MISSING}×${integerOf(file.count) ?? 0}）`)
+      .join('、')
+    assertions.push({
+      label: '改动',
+      text:
+        `当前未完成 turn（turn ${integerOf(currentTurn.turn) ?? MISSING}）的 file-tool 触碰 ` +
+        `${currentTurn.files.length} 个路径：${sample}；` +
+        '只有路径与计数（来自 tool/call 元数据），没有 added/deleted 行数。'
     })
   }
 
@@ -584,6 +615,7 @@ function renderH6(manifest) {
   lines.push('- 无 git status：不报告未提交 / 未跟踪改动；只读取 `.git` 元数据。')
   lines.push(
     '- workspaceChanges 只覆盖**已完成 turn**：create 发生在 turn 中时，当前 turn 的改动尚未记录；' +
+      'H1 用会话 `tool/call` 的「当前未完成 turn 的触碰」补充路径与计数（无行数统计）；' +
       'Session 结束后宿主不再提供 summary（新会话只能读包内证据，不能回读旧 Session 的改动）。'
   )
   lines.push('- 无删除原语：写入失败时不做清理，可能留下不完整批次（以 manifest.json 是否存在判断完成）。')

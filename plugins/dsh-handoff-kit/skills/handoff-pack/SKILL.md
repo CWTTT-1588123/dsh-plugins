@@ -30,6 +30,8 @@ description: 生成、校验或消费当前工作区的确定性会话交接包�
 
 生成时自动附带两类只读燃料（缺失时降级为 `available:false` + warning，不阻塞）：
 - `changes`：宿主 `workspaceChanges` 的**已完成 turn**改动（H1「本会话改动」、H4 `[改动]`）；
+  当前 turn 尚未结束、没有完整改动统计时，`changes.currentTurn` 会从会话 `tool/call`
+  补上该 turn 的 file-tool 路径与计次（H1「当前未完成 turn 的触碰」，无增删行数）；
 - `fuel`：当前 goal 与后台 jobs（只读，不自动执行）。
 
 ## 权威顺序

@@ -16,6 +16,7 @@
 
 import { LIMITS } from './contracts.js'
 import { isAbsoluteAny, tokenizePath } from './paths.js'
+import { FILE_TOOLS, extractTouchedPaths } from './session-trace.js'
 
 /** Session event type that announces one turn's change summary. */
 export const CHANGES_EVENT_TYPE = 'workspace/changes'
@@ -47,6 +48,93 @@ export function unavailableChanges(reason, collectedAt) {
   if (typeof collectedAt === 'string') block.collectedAt = collectedAt
   block.note = typeof reason === 'string' && reason !== '' ? reason : 'workspaceChanges evidence is unavailable'
   return block
+}
+
+/**
+ * Determine the still-open turn number, when one exists.
+ *
+ * The host appends `turn/start` before a turn and `workspace/changes` at its
+ * end, so a start without a matching end means the turn is still running and
+ * its own changes cannot be read yet. Returns `undefined` when no turn is open.
+ * @param {readonly object[]} events
+ * @returns {number|undefined}
+ */
+export function findOpenTurn(events) {
+  if (!Array.isArray(events)) return undefined
+  let lastStart
+  const ended = new Set()
+  for (const event of events) {
+    if (event === null || typeof event !== 'object') continue
+    const turn = event.data?.turn
+    if (!Number.isInteger(turn)) continue
+    if (event.type === 'turn/start') lastStart = turn
+    else if (event.type === 'turn/end') ended.add(turn)
+  }
+  if (lastStart !== undefined && !ended.has(lastStart)) return lastStart
+  return undefined
+}
+
+function parseToolArguments(value) {
+  if (value === null || typeof value !== 'object') return undefined
+  if (typeof value.arguments === 'string') {
+    try {
+      return JSON.parse(value.arguments)
+    } catch {
+      return undefined
+    }
+  }
+  return typeof value.arguments === 'object' ? value.arguments : undefined
+}
+
+/**
+ * Summarize file-tool touches of the still-open turn from `tool/call` metadata.
+ *
+ * This is the documented supplement for the host contract gap: the open turn
+ * has no `workspace/changes` event yet, so only paths/tool/count are available
+ * (no added/deleted line counts). Returns `undefined` when the turn touched no
+ * file-tool path.
+ *
+ * @param {{events: readonly object[], openTurn?: number, contexts?: object, limits?: typeof LIMITS}} input
+ * @returns {{turn: number, files: Array<{path: string, tool: string, count: number, lastSeq: number}>, note: string}|undefined}
+ */
+export function buildCurrentTurn({ events, openTurn, contexts = {}, limits = LIMITS } = {}) {
+  if (!Number.isInteger(openTurn) || !Array.isArray(events)) return undefined
+  const aggregates = new Map()
+  for (const event of events) {
+    if (event === null || typeof event !== 'object') continue
+    if (event.type !== 'tool/call') continue
+    if (!Number.isInteger(event.seq) || event.data?.turn !== openTurn) continue
+    const tool = event.data?.name
+    if (typeof tool !== 'string' || !FILE_TOOLS.includes(tool)) continue
+    const args = parseToolArguments(event.data)
+    if (args === undefined) continue
+    let paths
+    try {
+      paths = extractTouchedPaths(tool, args)
+    } catch {
+      paths = []
+    }
+    for (const rawPath of paths) {
+      const path = normalizeChangePath(rawPath, contexts)
+      if (path === undefined) continue
+      const current = aggregates.get(path)
+      if (current === undefined) aggregates.set(path, { path, tool, count: 1, lastSeq: event.seq })
+      else {
+        current.count += 1
+        current.lastSeq = Math.max(current.lastSeq, event.seq)
+        current.tool = tool
+      }
+    }
+  }
+  if (aggregates.size === 0) return undefined
+  const files = [...aggregates.values()]
+    .sort((left, right) => right.lastSeq - left.lastSeq)
+    .slice(0, limits.changesCurrentTurnMaxFiles)
+  return {
+    turn: openTurn,
+    files,
+    note: '当前 turn 尚未结束，只有 tool/call 的路径与计数，没有 added/deleted 行数'
+  }
 }
 
 function integerOr(value, fallback) {

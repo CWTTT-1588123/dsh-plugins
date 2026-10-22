@@ -1,4 +1,4 @@
-import assert from 'node:assert/strict'
+﻿import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
 import { LIMITS } from '../src/contracts.js'
@@ -6,7 +6,9 @@ import {
   boundDiffEntries,
   buildChanges,
   buildDiffEntry,
+  buildCurrentTurn,
   findLatestChangesEvent,
+  findOpenTurn,
   normalizeChangePath,
   selectDiffTargets,
   unavailableChanges
@@ -154,4 +156,42 @@ test('selectDiffTargets skips binary/oversized and caps count', () => {
   assert.deepEqual(selectDiffTargets(files, { ...LIMITS, changesMaxDiffs: 5 }).map((f) => f.path), ['a', 'd'])
   assert.equal(selectDiffTargets(files, { ...LIMITS, changesMaxDiffs: 1 }).length, 1)
   assert.deepEqual(selectDiffTargets(null), [])
+})
+
+test('findOpenTurn detects a started turn without an end', () => {
+  const events = [
+    { type: 'turn/start', seq: 1, data: { turn: 1 } },
+    { type: 'turn/end', seq: 5, data: { turn: 1 } },
+    { type: 'turn/start', seq: 6, data: { turn: 2 } },
+    { type: 'tool/call', seq: 7, data: { turn: 2, name: 'read', arguments: '{}' } }
+  ]
+  assert.equal(findOpenTurn(events), 2)
+  assert.equal(
+    findOpenTurn([
+      { type: 'turn/start', seq: 1, data: { turn: 1 } },
+      { type: 'turn/end', seq: 2, data: { turn: 1 } }
+    ]),
+    undefined
+  )
+  assert.equal(findOpenTurn([]), undefined)
+  assert.equal(findOpenTurn('nope'), undefined)
+})
+
+test('buildCurrentTurn aggregates file-tool paths of the open turn only', () => {
+  const events = [
+    { type: 'turn/start', seq: 1, data: { turn: 2 } },
+    { type: 'tool/call', seq: 2, data: { turn: 2, name: 'read', arguments: JSON.stringify({ path: 'src/a.js' }) } },
+    { type: 'tool/call', seq: 3, data: { turn: 2, name: 'write', arguments: JSON.stringify({ file_path: 'src/a.js' }) } },
+    { type: 'tool/call', seq: 4, data: { turn: 2, name: 'pwsh', arguments: JSON.stringify({ command: 'git status' }) } },
+    { type: 'tool/call', seq: 5, data: { turn: 1, name: 'write', arguments: JSON.stringify({ path: 'old.js' }) } }
+  ]
+  const block = buildCurrentTurn({ events, openTurn: 2, contexts: CONTEXTS })
+  assert.equal(block.turn, 2)
+  assert.deepEqual(block.files.map((file) => file.path), ['src/a.js'])
+  assert.equal(block.files[0].count, 2)
+  assert.equal(block.files[0].tool, 'write')
+  assert.equal(block.files[0].lastSeq, 3)
+  assert.match(block.note, /没有 added\/deleted/)
+  assert.equal(buildCurrentTurn({ events, openTurn: 3, contexts: CONTEXTS }), undefined)
+  assert.equal(buildCurrentTurn({ events, openTurn: undefined }), undefined)
 })

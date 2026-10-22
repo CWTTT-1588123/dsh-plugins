@@ -69,6 +69,8 @@ history). `create/append/update` also capture read-only P1 evidence when availab
 
 - `manifest.changes` — host `workspaceChanges` for the latest **completed** turn
   (`{available, source, turn, totals, files[], diffs?}`; `includeDiffs=true` adds bounded hunks);
+  when the current turn is still open, `changes.currentTurn` adds its file-tool paths/counts from
+  `tool/call` metadata (no line counts) and H1/H4 render that supplement;
 - `manifest.fuel` — current goal and session-owned background jobs (read-only, never auto-executes);
 
 Both degrade to `available:false` + warning when the service/data is missing. `manifest.schemaVersion`
@@ -113,3 +115,14 @@ plugin_manager remove_bundle target: dsh-handoff-kit
 
 The package directory in this repository stays untouched; packages already written under
 `$DSH_HOME/handoff` remain readable.
+
+## Development
+
+```powershell
+cd plugins/dsh-handoff-kit
+npm test        # node --test "test/**/*.test.js" (Node 24 does not expand a directory argument)
+```
+
+Batch cleanup is manual because the harness filesystem has no delete primitive: move obsolete
+`$DSH_HOME/handoff/<project>/<batch>` directories out of the handoff root (the plugin never deletes
+history). `docs/handoff-kit/GAPS.md` is the single ledger for gaps and boundaries.

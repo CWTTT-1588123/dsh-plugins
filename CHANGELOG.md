@@ -5,6 +5,24 @@
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-10-22
+
+挂账清理补丁（不改变 P1 功能面；台账见 [docs/handoff-kit/GAPS.md](docs/handoff-kit/GAPS.md)）。
+
+### Added
+
+- `manifest.changes.currentTurn`：当前**未完成 turn** 的 file-tool 路径/计次补充
+  （来自会话 `tool/call` 元数据，无 added/deleted 行数）；H1 新增「当前未完成 turn 的触碰」、
+  H4 增加对应 `[改动]` 断言，缓解"当前 turn 改动不可见"（Session 关闭后不可回读仍为宿主契约限制）。
+- `package.json` 增加 `scripts.test`：插件目录 `npm test` 直接运行全部测试（关闭 Node 24
+  `node --test` 目录位置参数不展开的 G10 缺口）。
+- `docs/handoff-kit/GAPS.md`：P0/P1 缺口台账（已关闭/设计边界/外部缺陷/归档四类，每项可复验）。
+
+### Changed
+
+- 测试/对照批次移动归档到 `%TEMP%\dsh-handoff-kit-archive\`（不删除，保留复查）；
+  user 级 handoff 根仅保留正式包 + 本次最终包；workspace `.dsh` 验证批次全部归档。
+
 ## [0.2.0] - 2026-10-22
 
 P1（0.2.x）完成：消费闭环 + 真实改动证据 + 批次血缘。验收证据见

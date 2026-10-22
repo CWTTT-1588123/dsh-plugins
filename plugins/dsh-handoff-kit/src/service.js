@@ -63,8 +63,10 @@ import { buildSessionTrace } from './session-trace.js'
 import {
   boundDiffEntries,
   buildChanges,
+  buildCurrentTurn,
   buildDiffEntry,
   findLatestChangesEvent,
+  findOpenTurn,
   normalizeChangePath,
   unavailableChanges
 } from './changes.js'
@@ -500,29 +502,55 @@ export function createService({
    */
   async function collectChanges({ context, exec, includeDiffs }) {
     const collectedAt = now().toISOString()
-    if (context.session === null) return unavailableChanges('no live session for this call', collectedAt)
+    const events =
+      context.session !== null && typeof context.session?.ownEvents === 'function'
+        ? context.session.ownEvents()
+        : []
+    const openTurn = findOpenTurn(events)
+    const currentTurn = buildCurrentTurn({
+      events,
+      openTurn,
+      contexts: context.contexts,
+      limits: LIMITS
+    })
+    const attach = (block) => {
+      if (currentTurn !== undefined) block.currentTurn = currentTurn
+      return block
+    }
+    if (context.session === null)
+      return attach(unavailableChanges('no live session for this call', collectedAt))
     const service = typeof ctx.get === 'function' ? ctx.get('workspaceChanges') : undefined
     if (service === undefined || service === null || typeof service.summary !== 'function')
-      return unavailableChanges('workspaceChanges service is unavailable in this profile', collectedAt)
-    const events = typeof context.session.ownEvents === 'function' ? context.session.ownEvents() : []
+      return attach(
+        unavailableChanges('workspaceChanges service is unavailable in this profile', collectedAt)
+      )
     const found = findLatestChangesEvent(events)
     if (found === undefined)
-      return unavailableChanges('no completed turn with workspace changes in this session', collectedAt)
+      return attach(
+        unavailableChanges('no completed turn with workspace changes in this session', collectedAt)
+      )
     let summary
     try {
       summary = service.summary(context.session.id, found.seq)
     } catch (error) {
-      return unavailableChanges(`workspaceChanges.summary failed: ${errorMessageOf(error)}`, collectedAt)
+      return attach(
+        unavailableChanges(`workspaceChanges.summary failed: ${errorMessageOf(error)}`, collectedAt)
+      )
     }
     if (summary === undefined || summary === null)
-      return unavailableChanges('workspaceChanges summary is no longer available (session disposed?)', collectedAt)
+      return attach(
+        unavailableChanges(
+          'workspaceChanges summary is no longer available (session disposed?)',
+          collectedAt
+        )
+      )
     const block = buildChanges({
       summary,
       contexts: context.contexts,
       limits: LIMITS,
       collectedAt
     })
-    if (includeDiffs !== true || block.available !== true) return block
+    if (includeDiffs !== true || block.available !== true) return attach(block)
     const rawFiles = Array.isArray(summary.files) ? summary.files : []
     const signal = exec?.signal ?? new AbortController().signal
     const entries = []
@@ -541,7 +569,7 @@ export function createService({
       }
     }
     block.diffs = boundDiffEntries(entries, LIMITS.changesDiffTotalBytes)
-    return block
+    return attach(block)
   }
 
   /** Read optional goal/jobs fuel; every failure degrades to available:false. */

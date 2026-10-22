@@ -156,6 +156,7 @@ const CHANGES_KEYS = Object.freeze([
   'totals',
   'files',
   'diffs',
+  'currentTurn',
   'collectedAt',
   'note'
 ])
@@ -163,6 +164,8 @@ const CHANGE_TOTALS_KEYS = Object.freeze(['files', 'added', 'deleted', 'binary',
 const CHANGE_FILE_KEYS = Object.freeze(['path', 'added', 'deleted', 'binary', 'oversized'])
 const CHANGE_DIFF_KEYS = Object.freeze(['path', 'kind', 'hunks', 'truncated'])
 const HUNK_KEYS = Object.freeze(['oldStart', 'oldLines', 'newStart', 'newLines', 'lines'])
+const CURRENT_TURN_KEYS = Object.freeze(['turn', 'files', 'note'])
+const CURRENT_TURN_FILE_KEYS = Object.freeze(['path', 'tool', 'count', 'lastSeq'])
 /** Key order of the P1 fuel block. */
 const FUEL_KEYS = Object.freeze(['goals', 'jobs'])
 const GOAL_FUEL_KEYS = Object.freeze(['available', 'goal', 'note'])
@@ -421,6 +424,15 @@ function canonicalChangesValue(value) {
       .sort(comparePaths)
   }
   if (Array.isArray(out.diffs)) out.diffs = canonicalDiffsValue(out.diffs)
+  if (isPlainObject(out.currentTurn)) {
+    const currentTurn = orderedObject(out.currentTurn, CURRENT_TURN_KEYS)
+    if (Array.isArray(currentTurn.files)) {
+      currentTurn.files = currentTurn.files.map((entry) =>
+        isPlainObject(entry) ? orderedObject(entry, CURRENT_TURN_FILE_KEYS) : entry
+      )
+    }
+    out.currentTurn = currentTurn
+  }
   return out
 }
 
@@ -805,6 +817,26 @@ function normalizeChanges(value) {
       .sort(comparePaths)
   }
   if (typeof value.collectedAt === 'string') out.collectedAt = value.collectedAt
+  if (isPlainObject(value.currentTurn)) {
+    const currentTurn = {}
+    if (Number.isInteger(value.currentTurn.turn)) currentTurn.turn = value.currentTurn.turn
+    if (Array.isArray(value.currentTurn.files)) {
+      currentTurn.files = value.currentTurn.files
+        .map((entry) => {
+          if (!isPlainObject(entry)) return undefined
+          const file = {
+            path: requireString(entry.path, 'changes.currentTurn.files.path'),
+            tool: typeof entry.tool === 'string' ? entry.tool : '',
+            count: integerOr(entry.count, 1, 'changes.currentTurn.files.count'),
+            lastSeq: integerOr(entry.lastSeq, 0, 'changes.currentTurn.files.lastSeq')
+          }
+          return file
+        })
+        .filter((entry) => entry !== undefined)
+    }
+    if (typeof value.currentTurn.note === 'string') currentTurn.note = value.currentTurn.note
+    if (currentTurn.turn !== undefined) out.currentTurn = currentTurn
+  }
   if (typeof value.note === 'string') out.note = value.note
   return out
 }
@@ -1218,6 +1250,16 @@ export function validateManifest(value) {
       }
       if (value.changes.diffs !== undefined && !Array.isArray(value.changes.diffs))
         add('warn', 'MANIFEST_CHANGES', 'changes.diffs', 'must be an array')
+      if (value.changes.currentTurn !== undefined) {
+        if (!isPlainObject(value.changes.currentTurn))
+          add('warn', 'MANIFEST_CHANGES', 'changes.currentTurn', 'must be an object')
+        else {
+          if (!Number.isInteger(value.changes.currentTurn.turn))
+            add('warn', 'MANIFEST_CHANGES', 'changes.currentTurn.turn', 'must be an integer')
+          if (value.changes.currentTurn.files !== undefined && !Array.isArray(value.changes.currentTurn.files))
+            add('warn', 'MANIFEST_CHANGES', 'changes.currentTurn.files', 'must be an array')
+        }
+      }
     }
   }
   if (value.fuel !== undefined) {

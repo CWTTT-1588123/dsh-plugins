@@ -9,7 +9,7 @@
 | 阶段 | 版本 | 目标 | 状态 | 设计 | 验收 |
 |---|---|---|---|---|---|
 | P0 | 0.1.x | 手动生成 + 校验闭环 | **done**（0.1.0，2026-10-22） | [P0 实施计划](docs/handoff-kit/design/P0_implementation_plan.md) | [P0 验收记录](docs/handoff-kit/acceptance/P0.md) |
-| P1 | 0.2.x | 真实改动证据 + 消费闭环 + 轻自动 | **done**（0.2.0，2026-10-22） | [P1 实施计划](docs/handoff-kit/design/P1_plan.md) | [P1 验收记录](docs/handoff-kit/acceptance/P1.md) |
+| P1 | 0.2.x | 真实改动证据 + 消费闭环 + 轻自动 | **done**（0.2.0，2026-10-22；0.2.1 挂账清理） | [P1 实施计划](docs/handoff-kit/design/P1_plan.md) | [P1 验收记录](docs/handoff-kit/acceptance/P1.md) |
 | P2 | 0.3.x | 协作与可视化 | 未开始 | — | — |
 | P3 | 1.0 | 规范与分发 | 未开始 | — | — |
 
@@ -61,6 +61,10 @@ summary 不可读）与无删除 API，已在验收记录挂账。详见
 
 **门槛**：真项目连续两次交接；漂移检测准确；M1/M2 的写入均显式触发；成本与隐私可测
 （M3 仅接口与文档，自动草稿的"不误触发"验收留到真正实现 M3 时）。
+
+**挂账台账**：[`docs/handoff-kit/GAPS.md`](docs/handoff-kit/GAPS.md)（P0/P1 全部缺口按
+已关闭/设计边界/外部缺陷/归档分类；0.2.1 已补 `changes.currentTurn`、`npm test`、
+批次归档与最终包）。
 
 ## P2 — 团队/界面（0.3.x）
 

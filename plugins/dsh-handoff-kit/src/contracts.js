@@ -14,7 +14,7 @@
 /** Package name; also the Cordis plugin name. */
 export const PLUGIN_NAME = 'dsh-handoff-kit'
 /** One semantic version for the generator, mirrored in package.json. */
-export const PLUGIN_VERSION = '0.2.0'
+export const PLUGIN_VERSION = '0.2.1'
 /** Manifest schema version owned by this generator. */
 export const SCHEMA_VERSION = 1
 /** P1/M2 manifest schema version: v1 fields + optional changes/fuel/lineage. */
@@ -128,6 +128,7 @@ export const LIMITS = Object.freeze({
   changesMaxDiffs: 20,
   changesDiffBytes: 64 * 1024,
   changesDiffTotalBytes: 512 * 1024,
+  changesCurrentTurnMaxFiles: 50,
   /** P1/M2 bounds: goal/jobs read-only fuel. */
   fuelMaxJobs: 50,
   fuelTextChars: 500,
