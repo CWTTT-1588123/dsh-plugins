@@ -1,6 +1,6 @@
 # dsh-plugins 文档索引（唯一入口）
 
-<!-- docs-meta: status=current; phase=cross; verified=a57385a@2026-10-23; tracks=-; supersedes=-; superseded-by=- -->
+<!-- docs-meta: status=current; phase=cross; verified=f656c09@2026-10-23; tracks=-; supersedes=-; superseded-by=- -->
 
 > 状态：**current**（2026-10-22 建立，D1）
 > 读者：用户 + 所有 AI 会话
@@ -81,6 +81,7 @@
 | `docs/handoff-kit/design/P3_plan.md` | 已建 | M0（2026-10-23 批准） |
 | `plugins/dsh-handoff-kit/spec/HANDOFF.md` + `spec/verify.md` | 已建 | P3/M1（规范公开，2026-10-23） |
 | `plugins/dsh-handoff-kit/schema/manifest.v1.json` + `manifest.v2.json` | 已建 | P3/M1（JSON Schema，2026-10-23） |
+| `plugins/dsh-handoff-kit/test/spec.test.js`（规范向量） | 已建 | P3/M1（2026-10-23） |
 
 D5（P2 实现）已完成；P3 设计文档已建（`P3_plan.md`，2026-10-23 开工），无需其他待建文档。
 
