@@ -9,7 +9,7 @@
 | 阶段 | 版本 | 目标 | 状态 | 设计 | 验收 |
 |---|---|---|---|---|---|
 | P0 | 0.1.x | 手动生成 + 校验闭环 | **done**（0.1.0，2026-10-22） | [P0 实施计划](docs/handoff-kit/design/P0_implementation_plan.md) | [P0 验收记录](docs/handoff-kit/acceptance/P0.md) |
-| P1 | 0.2.x | 真实改动证据 + 消费闭环 + 轻自动 | **设计中**（计划待审） | [P1 实施计划](docs/handoff-kit/design/P1_plan.md) | 待写 |
+| P1 | 0.2.x | 真实改动证据 + 消费闭环 + 轻自动 | **已批准**（计划已评审，M1 待开工） | [P1 实施计划](docs/handoff-kit/design/P1_plan.md) | 待写 |
 | P2 | 0.3.x | 协作与可视化 | 未开始 | — | — |
 | P3 | 1.0 | 规范与分发 | 未开始 | — | — |
 
@@ -41,18 +41,19 @@ fake 策略单测为补充而非替代。剩下的只是 P0 设计边界（无 g
 
 ## P1 — 好用（0.2.x）
 
-- 接入 `ctx.workspaceChanges` 获取会话真实文件改动/差异摘要（**保持禁子进程**）；
-- goal / task board / jobs 只读燃料（确定性证据，不引入自动执行）；
-- 消费侧闭环：`handoff_load` 工具 / `/handoff resume`（verify + 读取 + 漂移报告）；
-- 批次 `append` / `update` 与 `supersedes` 链（同一工作连续交接）；
-- opt-in LLM 叙述增强（默认关）；
-- 自动草稿钩子（会话结束/压缩前，opt-in 默认关）；
-- （工具链，可选）任务板执行器缺陷 G12 修复后，把「卡片自动补测」纳入回归；
-  P0 的权限矩阵与 `/handoff` UI 已实测关闭，无需再补。
+- **M1 消费闭环**：`handoff_load` 工具 / `/handoff resume`（verify → trust 判定 → 指针式读取，不写盘）；
+- **M2 真实证据与血缘**：接入 `ctx.workspaceChanges` 获取会话真实文件改动/差异摘要（**保持禁子进程**）；
+  批次 `append` / `update` 与 `supersedes` 链（新建批次 + 血缘，**不原地改历史批次**）；
+  goal / jobs 只读燃料（确定性证据，不引入自动执行）；
+- **M2 边界**：task board **暂不接入**——Host 无可用服务（已核实）且第三方执行器有 G12 缺陷，
+  待服务稳定/修复后再 opt-in；
+- **M3（仅接口与文档）**：opt-in LLM 叙述增强与自动草稿钩子**本阶段不实现自动写盘**，只留接口/配置/文档
+  （2026-10-22 评审决议 Q1；P1 运行时无 LLM 调用、无自动写入）。
 
-**设计文档**（开工前必须写）：[`docs/handoff-kit/design/P1_plan.md`](docs/handoff-kit/design/P1_plan.md)（v1-draft，**待你评审** §10 Q1–Q5 后开工）。
+**设计文档**：[`docs/handoff-kit/design/P1_plan.md`](docs/handoff-kit/design/P1_plan.md)（v1，2026-10-22 **已评审通过**，Q1–Q5 决议见文档 §10）。
 
-**门槛**：真项目连续两次交接；漂移检测准确；自动草稿不误触发；成本与隐私可测。
+**门槛**：真项目连续两次交接；漂移检测准确；M1/M2 的写入均显式触发；成本与隐私可测
+（M3 仅接口与文档，自动草稿的"不误触发"验收留到真正实现 M3 时）。
 
 ## P2 — 团队/界面（0.3.x）
 

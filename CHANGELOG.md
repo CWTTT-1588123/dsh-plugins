@@ -11,9 +11,9 @@
 - `ROADMAP.md`（P0–P3 单一权威路线）、`docs/adr/` 决策记录。
 - 迁入 3 份 handoff-kit 历史设计文档；新增 `P0_implementation_plan.md`（现行权威）。
 - `docs/handoff-kit/START_PROMPT.md`：新会话实施 P0 的启动提示词。
-- `docs/handoff-kit/design/P1_plan.md`：P1（0.2.x）实施计划草案（待评审；
-  含 handoff_load/resume 消费闭环、workspaceChanges 真实改动证据、append/supersedes、
-  goal/jobs 只读燃料、opt-in LLM/钩子的范围与决策点）。不改变已发布 0.1.0 行为。
+- `docs/handoff-kit/design/P1_plan.md`：P1（0.2.x）实施计划（2026-10-22 已评审通过；
+  M1 消费闭环 / M2 workspaceChanges+血缘 / M3 仅接口与文档；Q1–Q5 决议见文档 §10）。
+  不改变已发布 0.1.0 行为。
 
 ## [0.1.0] - 2026-10-22
 

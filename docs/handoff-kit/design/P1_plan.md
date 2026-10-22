@@ -1,7 +1,7 @@
-# dsh-handoff-kit P1 实施计划（draft，待评审）
+# dsh-handoff-kit P1 实施计划
 
-> 版本：v1-draft（2026-10-22）。对应 [ROADMAP](../../../ROADMAP.md) P1、[ADR-0001](../../adr/0001-handoff-kit-repo-and-decisions.md) 决策 17–19。
-> 状态：**待用户评审**；评审通过后才按本文动代码（ROADMAP 落地机制 1）。
+> 版本：v1（2026-10-22，已评审）。对应 [ROADMAP](../../../ROADMAP.md) P1、[ADR-0001](../../adr/0001-handoff-kit-repo-and-decisions.md) 决策 17–19。
+> 状态：**已评审通过**（2026-10-22；Q1–Q5 决议见 §10）。下一步 = M1 开工。
 > 证据标记：`【已核实】`=本会话用 `cordis_inspect`/源码/实测确认；`【实证】`=仓库文件引用；`【待验】`=未验证并写明验证方式；`【推断】`=基于已核实事实的推理。
 
 ## 0. 实施状态快照（单一权威）
@@ -13,6 +13,7 @@
 | DSH / profile | `0.2.1-rc.2` / `desktop`（Desktop） | 安装 manifest + `$DSH_PROFILE=desktop` 【已核实】 |
 | P0 验收 | [P0 验收记录](../acceptance/P0.md)：L1–L3 全过（严格口径） | 验收记录 §0/§5 【已核实】 |
 | P1 目标版本 | `0.2.x` | ROADMAP 状态总览 【实证】 |
+| P1 计划审批 | 2026-10-22：Q1 = M3 只留接口；Q2 = append/update 新建批次+血缘；Q3 = verify error 时 load 返回 `trust='invalid'`；Q4 = manifest 升 v2；Q5 = ROADMAP 改 task board 口径 | 用户决策记录（§10）【已核实】 |
 
 **一句话结论**：P1 把 P0 的"手动生成 + 校验闭环"升级为"**真实改动证据 + 消费闭环 + 批次演进**"，并保留 P0 的全部硬约束（host-only、零运行时依赖、禁子进程/网络/默认 LLM、手动触发）。建议按 M1→M2→M3 三个里程碑推进，每个里程碑单独验收；M3（opt-in LLM/自动钩子）建议**默认关闭且可整体推迟**——这是本计划需要你拍板的第一项。
 
@@ -24,8 +25,8 @@
 2. `ctx.workspaceChanges` 真实改动证据：把"本会话实际改了哪些文件/多少行"写进交接包（**保持禁子进程**，用宿主已有服务）；
 3. 批次 `append` / `update` + `supersedes` 链：同一工作连续交接（append-only，不原地改历史批次）；
 4. goal / jobs 只读燃料（确定性证据，不引入自动执行）；**task board 本阶段不接入**（理由见 §7 R5）；
-5. opt-in LLM 叙述增强（默认关）；
-6. 自动草稿钩子（opt-in，默认关，限 `agent/turn-stopping` 一类安全挂点）。
+5. opt-in LLM 叙述增强：**P1 仅预留接口/配置与文档，不启用**（Q1 决议）；
+6. 自动草稿钩子：**P1 仅预留接口与文档，不实现自动写盘**（Q1 决议）。
 
 **P1 不做（延续 P0 边界）**：UI/Client 半区、网络、子进程、DB、自动执行 next steps、自动 commit/push、默认 LLM、原地修改历史批次、任务板/团队集成。
 
@@ -116,10 +117,12 @@ changes: {
 
 **采集规则**：`fuel:{goals:{available,goal?}, jobs:{available,count,statusCounts,items:[...]}}`；只读、只取当前 agent/session 可见项、条数上限 50、文本截断 500 字符并脱敏；H4 标签 `[goal]`/`[job]`；缺失 → warning + `available:false`。
 
-### 3.5 opt-in LLM 叙述增强 + 自动草稿钩子（M3，建议可延后）
+### 3.5 opt-in LLM 叙述增强 + 自动草稿钩子（M3，**仅接口与文档**）
 
-- **LLM 叙述**：`handoff_pack action=create narrative='deterministic'|'llm'`（默认 deterministic）。`llm` 模式 = 确定性骨架为权威 + 一次受控模型调用补 H1/H6 叙述；约束：显式 opt-in、provider/model 由调用方或配置指定、输入仅交接包内已脱敏内容、输出设上限（≤8000 字符）、失败回退 deterministic 并 warning、成本/耗时计入结果。**隐私要求**：不得发送工作区文件原文（只发 HANDOFF 骨架/摘要）。
-- **自动草稿钩子**：opt-in 默认关。宿主事件目录里**没有** "session end"/"compaction before" 这类可直接挂的事件【已核实】（仅 `agent/turn-stopping`/`agent/disposed`/`session/flush` 等）→ 若做，只能用 `agent/turn-stopping` + `minTurns`/`minInterval` 阈值（每 N 轮最多一次），且默认关、失败静默、不写用户目录除非 `autoTarget` 显式配置。**建议 P1 只留接口与文档，不实现自动写盘**（见 §10 Q1）。
+> **Q1 决议（2026-10-22）**：M3 只留接口与文档，**本阶段不实现自动写盘/运行时默认关能力**；因此 P1 的实际运行时行为 = 确定性骨架，不产生任何 LLM 调用或自动写入。下列描述保留为未来实现契约。
+
+- **LLM 叙述**（未来合同，不在 P1 实现）：`handoff_pack action=create narrative='deterministic'|'llm'`（默认 deterministic）。`llm` 模式 = 确定性骨架为权威 + 一次受控模型调用补 H1/H6 叙述；约束：显式 opt-in、provider/model 由调用方或配置指定、输入仅交接包内已脱敏内容、输出设上限（≤8000 字符）、失败回退 deterministic 并 warning、成本/耗时计入结果。**隐私要求**：不得发送工作区文件原文（只发 HANDOFF 骨架/摘要）。
+- **自动草稿钩子**（未来合同，不在 P1 实现）：opt-in 默认关。宿主事件目录里**没有** "session end"/"compaction before" 这类可直接挂的事件【已核实】（仅 `agent/turn-stopping`/`agent/disposed`/`session/flush` 等）→ 若做，只能用 `agent/turn-stopping` + `minTurns`/`minInterval` 阈值（每 N 轮最多一次），且默认关、失败静默、不写用户目录除非 `autoTarget` 显式配置。
 
 ## 4. 数据契约（manifest@2 / HANDOFF / 错误码）
 
@@ -151,7 +154,7 @@ changes: {
 |---|---|---|
 | **M1 消费闭环** | `handoff_load` + `/handoff resume` + service/load 层 + 单测 + L1/L2 消费侧 E2E | 新会话只调一次 `handoff_load` 即得 trust 结论 + 指针；`/handoff resume` UI 实测 |
 | **M2 真实证据与血缘** | `changes.js` + `fuel.js` + manifest@2 + append/update/verify 链 + 测试 | 两次连续交接 + 链式 verify；changes 与外部 git 对照；旧批次不变且 v1 verify 兼容 |
-| **M3 opt-in 增强（建议延后）** | LLM 叙述 + 自动草稿钩子（默认关） | 显式开启才有行为；无开启时零差异；成本/隐私/误触发证据 |
+| **M3 opt-in 增强（仅接口与文档）** | LLM 叙述 + 自动草稿钩子的**接口/配置/文档**（不实现自动写盘与默认运行时行为，Q1 决议） | 显式开启路径在未来可用；P1 运行时与 M2 无差异（无 LLM 调用、无自动写盘） |
 
 ## 7. 风险与对策
 
@@ -192,15 +195,15 @@ changes: {
 | 接入第三方 task board 作为 P1 燃料 | **否决（暂缓）** | Host 无可编目服务（已核实）+ G12 执行器缺陷；等稳定后再评审 |
 | `handoff_load` 直接内联完整 HANDOFF（默认） | **否决** | 上下文成本；默认指针式，`include=full` 才内联 |
 
-## 10. 待你拍板的问题（评审重点）
+## 10. 评审决议（2026-10-22 已确认）
 
-| # | 问题 | 本计划建议 |
+| # | 问题 | 决议 |
 |---|---|---|
-| Q1 | M3（LLM 叙述 + 自动草稿钩子）是否纳入 P1 首批？ | **建议 P1 只做接口与文档、不实现自动写盘**；若你要求 P1 必须有可运行 opt-in，我按 §3.5 实现但默认关 |
-| Q2 | append/update 的语义确认：两者都新建批次 + 血缘，不原地改；`update` = `supersedes` 新包替代旧包结论 | 同意则照此实现 |
-| Q3 | `handoff_load` 在 verify 有 error 时：仍返回 `trust='invalid'` + findings，还是直接结构化拒绝？ | 建议返回但显式 invalid（便于模型给用户看问题） |
-| Q4 | manifest 是否直接升 `schemaVersion: 2`（v1 只读兼容），还是先加扩展键保持 v1？ | 建议升 2（字段语义变了，不假装还是 v1） |
-| Q5 | ROADMAP 的"task board 只读燃料"是否改为"待服务稳定后 opt-in"？ | 建议修改 ROADMAP 并注明依据（本次已核实无 Host 服务 + G12） |
+| Q1 | M3（LLM 叙述 + 自动草稿钩子）范围 | **已确认**：M3 只留接口/配置/文档，**不实现自动写盘与默认运行时行为**；P1 运行时 = 确定性骨架（无 LLM 调用、无自动写入） |
+| Q2 | append/update 语义 | **已确认**：两者都新建批次 + 写血缘（`lineage.previous/root/sequence`；`update` 用 `supersedes`），**不原地修改历史批次** |
+| Q3 | `handoff_load` 在 verify 有 error 时 | **已确认**：仍返回 `trust='invalid'` + findings（便于模型/用户看到问题），但不得宣称可采信 |
+| Q4 | manifest 版本 | **已确认**：升 `schemaVersion: 2`（v1 字段保留，新增可选块；v1 只读兼容，不迁移旧批次） |
+| Q5 | ROADMAP 的 task board 口径 | **已确认**：改为「goal/jobs 只读燃料；task board 待其 Host 服务稳定/修复 G12 后再 opt-in」 |
 
 ## 11. 本版新增问题/欠账（评审时注意）
 
