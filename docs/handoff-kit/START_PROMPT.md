@@ -1,9 +1,22 @@
 # 创造模式会话启动提示词：dsh-handoff-kit P0 实现
 
-> **用法**：在 DSH Web 新开会话，**工作区选 `D:\repos\dsh-plugins`**，
-> 权限选 **danger-full-access**（安装 bundle 与写用户级输出需要），然后粘贴本文件内容。
+> **推荐用法**：在 DSH Web 新开会话，**工作区选 `D:\repos\dsh-plugins`**，
+> 权限选 **danger-full-access**（安装 bundle 与写用户级输出需要），
+> 首条消息发送下面「启动消息」代码块即可——让 AI 自己用 read 工具读取本文件，
+> **不要手工粘贴本文件全文**（表格、空格、代码块在粘贴时容易错位）。
 >
 > 生成于 2026-10-22；对应 [ROADMAP](../../../ROADMAP.md) P0 阶段。
+
+## 启动消息（复制下面代码块发给新会话）
+
+```text
+你是 DSH 插件开发助手。当前会话的工作区应为 D:\repos\dsh-plugins；若不是，先停下告诉我。
+
+第一步：完整读取 D:\repos\dsh-plugins\docs\handoff-kit\START_PROMPT.md，并按其中“第一步：先读”的顺序把引用文档全部读完。
+第二步：严格按该文件与 docs/handoff-kit/design/P0_implementation_plan.md 执行 dsh-handoff-kit P0：先复述 P0 范围、3 个硬约束、默认输出与 target 语义、验收四关，然后直接开工，不再等额外确认。
+纪律：按 A→G 阶段推进，单测全绿后再安装；每阶段验证通过才进下一阶段；不改 stand 仓库与 DSH 官方源码；插件实现禁止联网/子进程/LLM。
+收尾：写 docs/handoff-kit/acceptance/P0.md、更新 ROADMAP 与 CHANGELOG、仓库内本地 commit（不 push），向我汇报交付物/验收结果/已知缺口。安装后若需重启 Desktop 才能复验，先告诉我再重启。
+```
 
 ---
 
@@ -88,4 +101,4 @@
 5. 最后向用户汇报：交付物清单、验收结果、已知缺口、P1 入口。
 
 开工前请先用自己的话复述：P0 范围、3 个硬约束、默认输出与 target 语义、验收四关。
-确认理解一致后再写第一行代码。
+若本次启动消息明确要求“直接开工”，则复述后直接执行，不再等待额外确认（两者矛盾时以启动消息为准）。
