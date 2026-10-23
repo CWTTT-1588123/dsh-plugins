@@ -1,6 +1,6 @@
 # dsh-plugins 文档索引（唯一入口）
 
-<!-- docs-meta: status=current; phase=cross; verified=9781ce5@2026-10-23; tracks=-; supersedes=-; superseded-by=- -->
+<!-- docs-meta: status=current; phase=cross; verified=3e446d4@2026-10-23; tracks=-; supersedes=-; superseded-by=- -->
 
 > 状态：**current**（2026-10-22 建立，D1）
 > 读者：用户 + 所有 AI 会话

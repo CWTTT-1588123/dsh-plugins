@@ -1,6 +1,6 @@
 # Changelog
 
-<!-- docs-meta: status=current; phase=cross; verified=9781ce5@2026-10-23; tracks=-; supersedes=-; superseded-by=- -->
+<!-- docs-meta: status=current; phase=cross; verified=3e446d4@2026-10-23; tracks=-; supersedes=-; superseded-by=- -->
 
 格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)；
 版本按 [ROADMAP](ROADMAP.md) 阶段映射（P0 = 0.1.x）。
@@ -42,6 +42,9 @@ P3（1.0 平台化）首个公开候选版，A 档开源公开产品。P0–P2 �
 - 会话候选来自客户端记录（Host 无枚举接口）；首次进入时下拉仅含宿主默认，
   已用显式回退提示兜底。
 - Host 侧生成的「开场提示词」正文仍为中文（内容而非 UI chrome，1.x 再评估英文渲染）。
+- 安装源热切换受宿主工具链限制：运行中切换 `link` ↔ npm 会激活失败并需重启 DSH；
+  `plugin_manager remove_bundle` 对 `link:` bundle 还可能清空目标目录（2026-10-23 演练发现，
+  详见 [GAPS](docs/handoff-kit/GAPS.md) §3）。
 
 ## [0.3.1] - 2026-10-22
 

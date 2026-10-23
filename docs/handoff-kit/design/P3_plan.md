@@ -1,6 +1,6 @@
 # dsh-handoff-kit P3 设计草案——平台化（1.0，A 档：开源公开产品）
 
-<!-- docs-meta: status=current; phase=P3; verified=9781ce5@2026-10-23; tracks=plugins/dsh-handoff-kit/src; supersedes=-; superseded-by=- -->
+<!-- docs-meta: status=current; phase=P3; verified=3e446d4@2026-10-23; tracks=plugins/dsh-handoff-kit/src; supersedes=-; superseded-by=- -->
 
 > 版本：**v1.0（2026-10-23，P3 执行计划；用户批准开工）**。
 > 产品档位：**A —— 开源公开产品**（用户 2026-10-22 两轮对齐确认，决议见 §0.1）。
@@ -244,7 +244,7 @@ handoff-kit verify-signature <batchDir> [--pubkey <path|keyId>]
 | **M1 规范公开**（✅ 已完成 2026-10-23） | 英文 `spec/HANDOFF.md`、`spec/verify.md`、`schema/manifest.v1/v2.json`；规范测试向量（合规/反例 fixture） | 规范 + schema + `test/spec.test.js` 向量 | 规范落地；`npm test` 全绿；`docs:check` 0 error（M1 提交 `f656c09`） |
 | **M2 schema 迁移器**（✅ 已完成 2026-10-23） | `migrate`（插件工具 + `/handoff migrate`）；v1→v2；`evidence/migration.json` provenance；迁移测试与只读源断言 | 迁移器 + `test/migration.test.js` | 源批次零写入/字节不变；新批次 verify 通过；`npm test` 全绿（M2 提交 `e3e6cba`） |
 | **M3 跨工具适配**（✅ 已完成 2026-10-23） | 零依赖 CLI `verify/load/list/migrate` + 英文帮助；非 DSH 环境真实文件系统 E2E；真实批次只读复验演练（CLI 直接读用户级交接包，trust=verified） | `src/cli.js` + `bin/handoff-kit.mjs` + `test/cli.test.js` | 退出码 0、3、1、2 与 spec 一致；`npm test` 全绿（M3 提交 `ce3cb8d`） |
-| **M4 发布与公开门面**（进行中：门面/CI/UI 已完成，rc.1 待发布） | `package.json` 发布元数据定稿；`npm pack --dry-run` 核对；**T6 门面**（英文 README/`LICENSE`/Issue 模板/隐私安全声明/CI/英文 UI+locale/P2-G1 选择器）；`1.0.0-rc.N` 发布到 `next`（**首次用户手动**）；bundle 通过 npm spec 安装/卸载/回滚演练；插件市场可选 | npm rc 包 + 公开仓库 + 安装/回滚记录 | 用户逐次授权；安装回执；CI 全绿 |
+| **M4 发布与公开门面**（门面/CI/UI/rc.1 发布已完成；安装演练发现工具链缺陷，见 GAPS §3） | `package.json` 发布元数据定稿；`npm pack --dry-run` 核对；**T6 门面**（英文 README/`LICENSE`/Issue 模板/隐私安全声明/CI/英文 UI+locale/P2-G1 选择器）；`1.0.0-rc.N` 发布到 `next`（**首次用户手动**）；bundle 通过 npm spec 安装/卸载/回滚演练；插件市场可选 | npm rc 包 + 公开仓库 + 安装/回滚记录 | 用户逐次授权；安装回执；CI 全绿 |
 | **M5 可信度外层** | 签名 opt-in + 策略配置 + 审计回执；负例测试（坏签名/篡改/坏策略 fail-closed） | 签名/策略实现 + 测试 | 负例全绿；默认路径零依赖不变 |
 | **M6 1.0 门槛验收** | 第三方代理独立安装使用 + 迁移演练 + 回滚 + 全量回归 + `docs:check` 0 error；P3 验收记录、CHANGELOG `1.0.0`、P3 文档冻结、ROADMAP 状态更新；隐私/平台声明复核 | `1.0.0`（latest）+ `docs/handoff-kit/acceptance/P3.md`（M6 产出，届时再建链） | ROADMAP P3 门槛 + §6.3 DoD + 用户确认 |
 
@@ -337,6 +337,7 @@ M0 评审/基线 → M1 规范 → M2 迁移器 → M3 跨工具适配 → M4 �
 - 2026-10-23 01:30：**M4 公开门面开始**——新建并推送 GitHub 公开仓库 `CWTTT-1588123/dsh-plugins`（SSH 推送）；提交 `a5dd175`（英文根 README、根/包内 `LICENSE`（MIT）、YAML Issue 模板、GitHub Actions CI：Windows 必跑 + Linux/macOS 实验性非阻塞、发布元数据移除 `private`）、`d476d2c`（英文 `USAGE.en.md` + 索引/发布清单同步）。npm 账号 `shanaliaoliao` 注册完成并开启 2FA，本机 `npm login --auth-type=web` 成功。
 - 2026-10-23 01:41：**CI 修复（提交 `62adf57`）**——GitHub Actions 默认 `core.quotepath=true` 使中文归档路径被 C-quote，`docs:check` 误报 DC1/DC2/DC3 共 9 errors（本机 global 配置为 false 未复现）；`scripts/docs-check.mjs` 的 git 调用统一强制 `-c core.quotepath=false`，模拟 CI 环境验证通过，CI 转绿（Windows required success）。
 - 2026-10-23 01:53：**M4 门面/UI 完成（提交 `9781ce5`；rc.1 待发布）**——版本 `1.0.0-rc.1`；英文优先 UI i18n（client 内嵌 EN/ZH 142 keys + `locale/*.json`，测试强制同步；跟随页面/浏览器语言，中文全文保留）；P2-G1 工作台项目/会话选择器（显式展示 Host 解析的 project/workspace/session 与 live/fallback 徽章，支持 pin/knownSessions，复用现有只读 `state` RPC，无新 RPC）。client 测试 3→19、总计 283 全绿、client.js 无网络/子进程/eval 新增；`docs:check` 0 error。**`npm publish --tag next`（1.0.0-rc.1）待用户确认后执行。**
+- 2026-10-23 08:3x：**1.0.0-rc.1 发布完成 + 安装演练（含严重工具链发现）**——npm 发布成功（registry `latest`/`next` 均指向 `1.0.0-rc.1`；tarball 33 文件核对通过、无 test/docs/.github；`npx dsh-handoff-kit@1.0.0-rc.1 verify <真实批次>` → exit 0 / trust=verified）；git tag `v1.0.0-rc.1` 已推送。**安装演练**：npm 包体安装成功，但实时激活失败、需重启 DSH；`plugin_manager remove_bundle` 对 `link:` bundle **清空了本地插件目录 64 个文件**，已 `git restore` 完整恢复并验证（283 测试/docs:check 0 error/工作树干净/junction 可解析）。详见 [GAPS](../GAPS.md) §3。当前 profile 已恢复为 link 安装（待重启加载）。
 
 **文档治理落点（评审通过后，需另行批准的改动）**：
 

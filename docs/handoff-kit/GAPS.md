@@ -1,6 +1,6 @@
 # dsh-handoff-kit 挂账与边界台账
 
-<!-- docs-meta: status=current; phase=cross; verified=c5fe455@2026-10-22; tracks=-; supersedes=-; superseded-by=- -->
+<!-- docs-meta: status=current; phase=cross; verified=3e446d4@2026-10-23; tracks=-; supersedes=-; superseded-by=- -->
 
 > 版本：v1（2026-10-22）。本文件把 P0/P1 验收记录里的"已知缺口"统一分类，避免"挂账"语义漂移。
 > 分类：**已关闭**（已实现/实测）；**设计边界**（P0/P1 约束或宿主契约，不在本插件内修，需改计划或等宿主）；
@@ -79,3 +79,32 @@
 （`69e7`/`da0b`/`43ff` 为 P0/P1 历史包；`e27c` 为 U1 生成包；`78e8` 为 U3 append 第 2 代）。
 L2 的篡改测试批次 `20261022T120000Z-dead` 为受控临时副本，验证后已删除；
 读操作零写入由整目录 hash/size/mtime 快照对照证明（见 P2 验收 §5）。
+
+## 3. M4 安装/回滚演练发现（2026-10-23）
+
+**演练步骤**（M4 验收项「bundle 通过 npm spec 安装/卸载/回滚」）：
+`plugin_manager remove_bundle`（移除本地 link）→ `install_bundle target: dsh-handoff-kit@1.0.0-rc.1`
+→ 验证 → 回滚 `install_bundle target: <本地目录>`。
+
+**结果与证据**：
+
+1. **npm 包体安装成功**：profile `node_modules/dsh-handoff-kit` 为真实目录、版本 `1.0.0-rc.1`、
+   含 `index.js`/`spec/`；profile `package.json` 依赖写入 `1.0.0-rc.1`。发布包体正确。
+2. **实时激活失败（需重启 DSH）**：安装后 Host 报 `failed to import` / `cannot resolve profile bundle`；
+   随后 `plugin_manager` 回滚 profile `package.json`（依赖与 `dsh.profile.bundles` 条目丢失），
+   node_modules 遗留 **broken junction**。→ 切换安装源（link ↔ npm）必须重启 DSH，实时热切换不可用
+   （与 G4 / P2-G5 同类的工具链限制）。
+3. **严重：`remove_bundle` 清空 link 目标目录**：移除 `link:` bundle 后，本地
+   `plugins/dsh-handoff-kit/` 的 **64 个文件被删除**（`git status` 全部 `.D`）。已用
+   `git restore --source=HEAD --worktree -- plugins/dsh-handoff-kit` 完整恢复，并验证：
+   工作树干净、`npm test` 283 全绿、`docs:check` 0 error、profile junction 可解析到本地 `index.js`。
+   → **本机工具链下对 `link:` bundle 执行 remove/install 有数据丢失风险；今后演练必须先备份
+   （`git archive`/`git bundle`）或在干净 profile 中执行。**
+
+**结论**：M4 的「实时安装/回滚」只能以「备份 + 重启」的方式验收；当前 profile 已恢复为本地 link
+安装（重启后加载）。建议向 DSH `plugin_manager` 上游报告 `remove_bundle` 对 link 目标的处理缺陷。
+profile `package.json` 手工修复前的备份：`package.json.bak-handoff-rehearsal-20261023-083903`。
+
+**复验命令**：`git status --porcelain`（空）；`cd plugins/dsh-handoff-kit && npm test`（全绿）；
+`node scripts/docs-check.mjs`（0 error）；在 profile 目录 `require.resolve('dsh-handoff-kit')`
+解析到本地 `index.js`。
