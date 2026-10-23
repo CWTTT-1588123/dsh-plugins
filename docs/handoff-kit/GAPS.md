@@ -1,6 +1,6 @@
 # dsh-handoff-kit 挂账与边界台账
 
-<!-- docs-meta: status=current; phase=cross; verified=3e446d4@2026-10-23; tracks=-; supersedes=-; superseded-by=- -->
+<!-- docs-meta: status=current; phase=cross; verified=bae5a79@2026-10-23; tracks=-; supersedes=-; superseded-by=- -->
 
 > 版本：v1（2026-10-22）。本文件把 P0/P1 验收记录里的"已知缺口"统一分类，避免"挂账"语义漂移。
 > 分类：**已关闭**（已实现/实测）；**设计边界**（P0/P1 约束或宿主契约，不在本插件内修，需改计划或等宿主）；
@@ -108,3 +108,17 @@ profile `package.json` 手工修复前的备份：`package.json.bak-handoff-rehe
 **复验命令**：`git status --porcelain`（空）；`cd plugins/dsh-handoff-kit && npm test`（全绿）；
 `node scripts/docs-check.mjs`（0 error）；在 profile 目录 `require.resolve('dsh-handoff-kit')`
 解析到本地 `index.js`。
+
+4. **补充发现：projectKey 随 git remote 变化（2026-10-23 重启后验收发现）**——
+   `projectKey` 的 seed 优先 `remote:<origin URL>`、无 remote 时回退 `workspace:<canonical path>`
+   （`src/paths.js`）。M4 给仓库添加 GitHub remote 后，本机项目 key 由
+   `dsh-plugins-cb7aa4e5`（workspace seed）变为 `dsh-plugins-45e08a68`（remote seed），
+   旧 8 个批次默认 `handoff_load` / `handoff_pack verify` 查不到（新 key 目录尚不存在）；
+   用 CLI 显式批次路径仍可 `verify`（trust=verified）。这是「跨 clone 稳定标识」设计的副作用，
+   但对既有用户是**默认入口级回归**。
+   → 1.0 前需二选一（建议 A + C）：
+   A. 显式给出 `batchId` 时，若当前 project key 下找不到，跨所有 project key **只读**查找并返回
+      `PROJECT_KEY_FALLBACK` 警告（不改写任何批次）；
+   B. 若无法唯一确定，返回候选列表并提示用 CLI 显式路径或迁移；
+   C. 文档记录「添加/更换 remote 会改变 project key」及迁移办法。
+   本项列入 M5/M6 收口清单；旧批次当前可用 CLI 显式路径访问。

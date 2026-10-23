@@ -117,6 +117,7 @@ UI 点击写入，复制开场提示词 trust=verified；旧批次漂移显示 s
 >
 > **M4 门面/UI 完成（2026-10-23，提交 `62adf57`/`9781ce5`）**：GitHub 公开仓库 + 英文根 README/`LICENSE`/YAML Issue 模板/CI（Windows 必跑，Linux/macOS 实验性非阻塞）；英文 `USAGE.en.md`；英文优先 i18n（client 内嵌 142 keys + `locale/*.json`，跟随页面/浏览器语言，中文保留）与 P2-G1 工作台项目/会话选择器；版本 `1.0.0-rc.1`；283 测试全绿、`docs:check` 0 error、CI 绿；**rc.1 已发布**（npm tag `next`/`latest`）+ tag `v1.0.0-rc.1`。
 > **安装演练发现（2026-10-23）**：npm 包体安装成功，但实时激活需重启 DSH；且 `plugin_manager remove_bundle` 会清空 `link:` 目标目录（本地插件 64 文件被删，已 git 恢复并验证）。详见 [GAPS](docs/handoff-kit/GAPS.md) §3；后续安装演练必须备份 + 重启。
+> **验收补充（2026-10-23）**：添加 GitHub remote 使 `projectKey` 由 workspace seed 变为 remote seed，旧批次默认入口不可见（CLI 显式路径可用）；1.0 前补「显式 batchId 跨 project key 只读回退 + 迁移说明」，见 GAPS §3.4。
 
 - `manifest@2` / `HANDOFF.md` 规范公开 + schema 迁移器；
 - 跨工具适配器（其他 agent / CLI 消费同一交接包）；
