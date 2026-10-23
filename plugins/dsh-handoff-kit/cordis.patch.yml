@@ -1,7 +1,8 @@
-# dsh-handoff-kit: host-only bundle (no Client half).
-# Provides the `handoff_pack` tool, the `/handoff` command, and the
-# `handoff-pack` skill; it writes deterministic handoff packages only when
-# a human or the model explicitly asks for them.
+# dsh-handoff-kit: DSH bundle with both halves in one package:
+# - Host half: `handoff_pack` tool, `/handoff` command, `handoff-pack` skill;
+# - Client half: web 「交接」 button / floating panel / workbench (client.js).
+# It writes deterministic handoff packages only when a human or the model
+# explicitly asks for them.
 - insert:
     - id: dsh-handoff-kit
       name: dsh-handoff-kit

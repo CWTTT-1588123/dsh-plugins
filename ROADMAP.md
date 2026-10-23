@@ -1,6 +1,6 @@
 # dsh-plugins ROADMAP
 
-<!-- docs-meta: status=current; phase=cross; verified=dd91f73@2026-10-23; tracks=-; supersedes=-; superseded-by=- -->
+<!-- docs-meta: status=current; phase=cross; verified=c1e57a2@2026-10-23; tracks=-; supersedes=-; superseded-by=- -->
 
 > 本文件是插件仓库**阶段与状态的唯一权威**。规划、进度、验收均以这里为准；
 > 每阶段的设计与验收见 `docs/<插件>/{design,acceptance}/`。

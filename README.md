@@ -1,6 +1,6 @@
 # dsh-plugins
 
-<!-- docs-meta: status=current; phase=cross; verified=c3ba381@2026-10-23; tracks=-; supersedes=-; superseded-by=- -->
+<!-- docs-meta: status=current; phase=cross; verified=c1e57a2@2026-10-23; tracks=-; supersedes=-; superseded-by=- -->
 
 DeepSeek Harness (DSH) plugins, developed in this repository. The main product is
 **`dsh-handoff-kit`** — deterministic, verifiable session handoff packages
@@ -19,11 +19,11 @@ verifies hashes before trusting the claims.
 
 | Surface | What you get |
 |---|---|
-| Tool `handoff_pack` | `scan` / `create` / `verify` / `list` / `append` / `update` / `migrate` |
+| Tool `handoff_pack` | `scan` / `create` / `verify` / `list` / `append` / `update` / `migrate` / `delete` |
 | Tool `handoff_load` | Read-only consumption: verify + `trust` verdict (`verified` / `stale` / `invalid`) + drift + pointers |
-| Command `/handoff` | Human shortcut: create (default), append, update, scan, verify, list, migrate, resume |
-| UI workbench | 「交接」 button in the conversation composer, floating panel (generate / load), and a 交接工作台 page |
-| CLI `handoff-kit` | `verify` / `load` / `list` / `migrate` for non-DSH agents, scripts and CI (exit codes `0/3/1/2`) |
+| Command `/handoff` | Human shortcut: create (default), append, update, scan, verify, list, migrate, delete, resume |
+| UI workbench | 「交接」 button in the conversation composer, floating panel (generate / load), and a 交接工作台 page with batch delete |
+| CLI `handoff-kit` | `verify` / `load` / `list` / `migrate` / `sign` / `delete` for non-DSH agents, scripts and CI (exit codes `0/3/1/2`) |
 | Spec | [`spec/HANDOFF.md`](plugins/dsh-handoff-kit/spec/HANDOFF.md) + [`spec/verify.md`](plugins/dsh-handoff-kit/spec/verify.md) + JSON Schemas under `schema/` |
 
 Runtime guarantees: zero runtime dependencies, **no network**, **no subprocess**, no

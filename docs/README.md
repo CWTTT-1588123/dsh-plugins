@@ -1,6 +1,6 @@
 # dsh-plugins 文档索引（唯一入口）
 
-<!-- docs-meta: status=current; phase=cross; verified=dd91f73@2026-10-23; tracks=-; supersedes=-; superseded-by=- -->
+<!-- docs-meta: status=current; phase=cross; verified=c1e57a2@2026-10-23; tracks=-; supersedes=-; superseded-by=- -->
 
 > 状态：**current**（2026-10-22 建立，D1）
 > 读者：用户 + 所有 AI 会话
@@ -66,7 +66,7 @@
 | [P3 验收记录](handoff-kit/acceptance/P3.md) | 验收 | frozen | P3 | P3 1.0 证据：规范/迁移器/CLI/发布/签名策略删除/代理验收/迁移与回滚/已知限制（M6 产出） |
 | [插件 README](../plugins/dsh-handoff-kit/README.md) | 产品文档 | current | 1.0.0 | 插件使用/安装/开发说明（UI 工作台/中英文切换/项目选择器；签名/策略/回执；批次删除；re-grounding 与路径存在性） |
 | [插件使用说明（标准交接流程）](../plugins/dsh-handoff-kit/USAGE.md) | 使用说明 | current | 1.0.0 | 旧会话生成 → 新会话只粘贴 → 旁证只读复核 → 明确指令后开工（四步；含 re-grounding/语言切换/高级功能） |
-| [插件使用说明（英文）](../plugins/dsh-handoff-kit/USAGE.en.md) | 使用说明 | current | 1.0.0-rc | USAGE.md 英文对照（四步标准交接流程；1.0 公开门面） |
+| [插件使用说明（英文）](../plugins/dsh-handoff-kit/USAGE.en.md) | 使用说明 | current | 1.0.0 | USAGE.md 英文对照（四步标准交接流程；1.0 公开门面） |
 | [交接包格式规范（英文）](../plugins/dsh-handoff-kit/spec/HANDOFF.md) | 规格 | current | P3 | 1.0 交接包格式规范：批次布局/manifest@1/2/HANDOFF 结构/证据标签/trust；签名 `signature.json`/策略 `policy.json`/回收站（M5/M5b） |
 | [交接包验证规范（英文）](../plugins/dsh-handoff-kit/spec/verify.md) | 规格 | current | P3 | 1.0 验证算法：步骤/finding 码/trust 判定/签名与路径检查/结果级 signature·receipt/CLI 契约（M1/M5/M5b） |
 | [handoff-pack 技能](../plugins/dsh-handoff-kit/skills/handoff-pack/SKILL.md) | 技能 | current | 0.3.1 | 模型使用交接包的流程说明（P2 UI 不改变模型消费路径） |

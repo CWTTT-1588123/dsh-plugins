@@ -176,3 +176,7 @@ project key 扫描）；血缘保护扫描同 slug 批次的 `lineage.previous/s
   绝对/`..` 忽略；CLI 仅在带 `--workspace` 时检查；无 workspace 时跳过且不误报。
 - **验证**：`npm test` 362 全绿（303→331→362）；`docs:check` 0 error；真实 bin E2E：sign→verify
   `--pubkey`（signature=valid/trust=verified）→ 软删除到 `.trash`（原目录消失、trash 内容完整）。
+- **re-grounding 实测（2026-10-23）**：新会话 `session-8d32a243…` 对批次
+  `20261023T023018Z-48c9` 完成 handoff_load → 读关键文件 → 复算哈希 → 查 npm/GitHub →
+  发现并行收尾期间漂移 → 复查更新 → 汇报且未写文件；暴露 4 项残余文档问题（已修复，见
+  [P3 验收记录](acceptance/P3.md) §14）。包快照 vs 当前 HEAD 漂移属预期（stale，非损坏）。
