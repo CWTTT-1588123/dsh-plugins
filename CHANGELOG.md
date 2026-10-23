@@ -7,15 +7,20 @@
 
 ## [Unreleased]
 
+## [1.0.0-rc.2] - 2026-10-23
+
+rc.1 发布后的界面与项目标识回归修复（P0–P2 运行边界不变：零依赖 / 无网络 / 无子进程 /
+无 LLM / 历史批次不原地重写）。
+
 ### Fixed
 
 - **中文界面回归（rc.1 发布后发现）**：语言探测改为「用户显式偏好 > 浏览器 `zh*` > 页面
   `document.lang` > 英文」；新增工作台/浮层面板的 **中文 / English** 切换（即时生效，记在
   `localStorage: dsh.handoff-kit.locale`）。
 - **projectKey 变化后旧批次不可见**：添加/更换 git remote 会改变 project key；显式 `batchId` 的
-  `load`/`verify` 增加跨 project key **只读**回退（`PROJECT_KEY_FALLBACK` 警告，不降级 trust），
-  工作台在当前 key 0 批次时按 key 分组显示历史批次（只读横幅、禁用继续交接）；回退只匹配
-  **同 workspace slug** 的历史 key，无关项目不会混入；写操作仍只落当前 key。
+  `load`/`verify` 增加跨 project key **只读**回退（`PROJECT_KEY_FALLBACK` 结果级警告，不进入
+  findings/counts、不降级 trust），工作台在当前 key 0 批次时按 key 分组显示历史批次（只读横幅、
+  禁用继续交接）；回退只匹配 **同 workspace slug** 的历史 key，无关项目不会混入；写操作仍只落当前 key。
 
 ## [1.0.0-rc.1] - 2026-10-23
 

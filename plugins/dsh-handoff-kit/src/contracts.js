@@ -14,7 +14,7 @@
 /** Package name; also the Cordis plugin name. */
 export const PLUGIN_NAME = 'dsh-handoff-kit'
 /** One semantic version for the generator, mirrored in package.json. */
-export const PLUGIN_VERSION = '1.0.0-rc.1'
+export const PLUGIN_VERSION = '1.0.0-rc.2'
 /** Manifest schema version owned by this generator. */
 export const SCHEMA_VERSION = 1
 /** P1/M2 manifest schema version: v1 fields + optional changes/fuel/lineage. */
