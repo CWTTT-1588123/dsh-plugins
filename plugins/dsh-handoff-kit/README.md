@@ -145,8 +145,8 @@ into `evidence/files/`.
 - DSH `>=0.2.0 <0.3.0` (desktop profile tested on `0.2.1-rc.2`).
 - `target=user` requires the session sandbox mode `danger-full-access`; in
   `workspace-write` use `target=workspace`, in `read-only` generation is refused.
-- Zero runtime dependencies; the package is installed from a local directory with
-  `plugin_manager install_bundle`.
+- Zero runtime dependencies; install from npm (`dsh-handoff-kit@1.0.0`) or from a local
+  directory with `plugin_manager install_bundle`.
 - The UI workbench needs the Web composition (the Desktop profile provides it). In a
   host-only profile the bundle still registers its tools/command/skill; the Client half and
   the `/api/handoff-kit/rpc` route are simply absent.

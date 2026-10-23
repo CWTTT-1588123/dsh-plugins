@@ -33,10 +33,11 @@ rewritten in place.
 ### Install (DSH)
 
 ```text
-plugin_manager install_bundle target: dsh-handoff-kit@<version>
+plugin_manager install_bundle target: dsh-handoff-kit@1.0.0
 ```
 
-`1.0.0-rc` npm publishing is in progress; until then, install from a local checkout:
+Published on npm as **`dsh-handoff-kit@1.0.0`** (`latest`). For local development from this
+checkout:
 
 ```text
 plugin_manager install_bundle target: D:\repos\dsh-plugins\plugins\dsh-handoff-kit
@@ -47,14 +48,19 @@ The package targets DSH `>=0.2.0 <0.3.0` (Windows first; macOS/Linux are
 
 ### CLI (outside DSH)
 
-After the npm release exists (or from a checkout):
+Install or run it without installing DSH:
 
 ```text
-handoff-kit verify  <batchDir> [--workspace <dir>] [--json]   # exit 0 verified, 3 stale, 1 invalid, 2 usage/IO
-handoff-kit load    <batchDir> [--sections|--full] [--json]
+npm install dsh-handoff-kit          # or: npx dsh-handoff-kit <command>
+handoff-kit verify  <batchDir> [--workspace <dir>] [--pubkey <pem>] [--json]
+handoff-kit load    <batchDir> [--workspace <dir>] [--sections|--full] [--json]
 handoff-kit list    --root <handoffRoot> [--json]
-handoff-kit migrate <batchDir> --out <newBatchDir>            # v1 -> v2, source is read-only
+handoff-kit migrate <batchDir> --out <newBatchDir>                 # v1 -> v2, source read-only
+handoff-kit sign    <batchDir> --key <privateKey.pem> [--force]    # opt-in signature
+handoff-kit delete  <batchDir> [--hard] [--force]                  # soft delete by default
 ```
+
+Exit codes: `0` verified/ok, `3` stale, `1` invalid/refused, `2` usage/IO.
 
 See [`plugins/dsh-handoff-kit/spec/verify.md`](plugins/dsh-handoff-kit/spec/verify.md) §4
 for the frozen CLI contract.

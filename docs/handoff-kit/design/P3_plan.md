@@ -1,6 +1,6 @@
 # dsh-handoff-kit P3 设计草案——平台化（1.0，A 档：开源公开产品）
 
-<!-- docs-meta: status=current; phase=P3; verified=f162ac1@2026-10-23; tracks=plugins/dsh-handoff-kit/src; supersedes=-; superseded-by=- -->
+<!-- docs-meta: status=frozen; phase=P3; verified=2cd8b40@2026-10-23; tracks=plugins/dsh-handoff-kit/src; supersedes=-; superseded-by=- -->
 
 > 版本：**v1.0（2026-10-23，P3 执行计划；用户批准开工）**。
 > 产品档位：**A —— 开源公开产品**（用户 2026-10-22 两轮对齐确认，决议见 §0.1）。
@@ -346,6 +346,7 @@ M0 评审/基线 → M1 规范 → M2 迁移器 → M3 跨工具适配 → M4 �
 - 2026-10-23 09:32：**新增 M5b 批次删除（用户决定）**——软删除（回收站可恢复）为主，CLI 额外 `--hard` 永久删除；被其它批次 `lineage` 引用的批次默认拒绝删除（先删后代或显式 `--force` 并警告）；UI 删除按钮 + 二次确认；工具增加删除动作。M5 完成后立即实现，1.0 前验收。
 - 2026-10-23 10:1x：**M5 + A 增强 + M5b 实现完成（未提交，版本待升 1.0.0-rc.3）**——M5：opt-in Ed25519 `signature.json`（CLI sign/`--pubkey`、trusted-keys、`SIGNATURE_INVALID`，不改变 manifest schema）、`policy.json`（严格 schema/只能追加/内置地板不可关/fail-closed `HANDOFF_POLICY_INVALID`/provenance 进 evidence）、结果级 `receipt`；A 增强：开场提示词 0–4 步含 re-grounding（实际读关键文件 + 叙述 vs 现状核对）、`HANDOFF_PATH_MISSING`（生成 warning + 校验 warn finding）；M5b：软删除 `.trash` + CLI `--hard` + 血缘保护 `HANDOFF_BATCH_REFERENCED` + UI 删除按钮/二次确认。测试 303→362 全绿、`docs:check` 0 error；真实 CLI E2E sign/verify/delete 通过。下一步：统一提交 → M6（代理验收/迁移演练/回滚/1.0.0 发布/验收记录冻结）。
 - 2026-10-23 10:2x：**M6 1.0 门槛执行**——版本升 `1.0.0`（由 rc.3 候选晋升，rc.3 未单独发布）；`docs/handoff-kit/acceptance/P3.md` 已建（frozen）；代理验收（干净目录 npm install tarball + 非 DSH CLI list/verify/load/sign/verify/delete）、迁移演练（真实 v1 批次 `20261022T034757Z-69e7` → v2，源字节不变、新批次 stale 预期）、回滚演练（软删→.trash→移回→verify）通过；回归 362 测试/docs:check 0 error/npm pack 37。**待用户重启 DSH 抽查 UI（删除按钮/新提示词）+ 发布 1.0.0 + 打 tag `v1.0.0`。**
+- 2026-10-23 10:35：**P3 完成（1.0.0 已发布，文档冻结）**——npm `dsh-handoff-kit@1.0.0` 发布成功（`latest=1.0.0`；tarball 37 文件；`npx dsh-handoff-kit@1.0.0 verify` 真实批次 exit 0/trust=verified）；git tag `v1.0.0` 已推送（指向 `2cd8b40`）；本计划状态置 frozen，验收记录 [P3.md](../acceptance/P3.md) 冻结；ROADMAP P3 → done。后续 1.x 跟进 GAPS §3/§4 与验收 §10 列出的工具链/平台限制。
 
 **文档治理落点（评审通过后，需另行批准的改动）**：
 

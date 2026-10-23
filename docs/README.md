@@ -52,7 +52,7 @@
 | [P0 模块接口](handoff-kit/design/P0_module_interfaces.md) | 规格 | frozen | P0 | P0 模块级接口规格 |
 | [P1 实施计划](handoff-kit/design/P1_plan.md) | 计划 | frozen | P1 | P1 实施基线（D3 已改为"已完成/frozen"） |
 | [P2 实施计划（UI 工作台）](handoff-kit/design/P2_plan.md) | 计划 | frozen | P2 | UI 工作台 v1：入口/面板/工作台页/U0–U4（已完成，D5 收尾冻结） |
-| [P3 实施计划（平台化 1.0）](handoff-kit/design/P3_plan.md) | 计划 | current | P3 | 规范公开/迁移器/跨工具 CLI/发布/签名策略/公开门面（A 档开源公开产品；M0–M3 完成，M4 门面/UI 完成，rc.1 待发布） |
+| [P3 实施计划（平台化 1.0）](handoff-kit/design/P3_plan.md) | 计划 | frozen | P3 | 规范公开/迁移器/跨工具 CLI/发布/签名策略/公开门面（A 档开源公开产品；M0–M6 完成，**1.0.0 已发布**，2026-10-23 冻结） |
 | [P2 启动提示词](handoff-kit/START_PROMPT_P2.md) | 入口（历史） | frozen | P2 | D5 启动场景历史记录；P2 完成后不再作为新会话入口 |
 | [旧设计索引（历史）](archive/handoff-kit/design-README.md) | 索引（旧） | historical | — | 被本索引取代；D3 已归档 |
 | [通用交接包生成器 v1（历史）](archive/handoff-kit/20261022_通用交接包生成器_v1.md) | 方法论 | historical | — | 用户原意 + H0–H9 方法论；D3 已归档，内容仍有效 |
@@ -64,8 +64,8 @@
 | [P1 验收记录](handoff-kit/acceptance/P1.md) | 验收 | frozen | P1 | P1 M1–M3 + 0.2.1 清理证据 |
 | [P2 验收记录](handoff-kit/acceptance/P2.md) | 验收 | frozen | P2 | P2 U0–U4/L1–L3 浏览器实测证据、已知缺口（0.3.0；§9 为 0.3.1 提示词安全勘误） |
 | [P3 验收记录](handoff-kit/acceptance/P3.md) | 验收 | frozen | P3 | P3 1.0 证据：规范/迁移器/CLI/发布/签名策略删除/代理验收/迁移与回滚/已知限制（M6 产出） |
-| [插件 README](../plugins/dsh-handoff-kit/README.md) | 产品文档 | current | 1.0.0-rc | 插件使用/安装/开发说明（UI 工作台/中英文切换/项目选择器；签名/策略/回执；批次删除；re-grounding 与路径存在性） |
-| [插件使用说明（标准交接流程）](../plugins/dsh-handoff-kit/USAGE.md) | 使用说明 | current | 1.0.0-rc | 旧会话生成 → 新会话只粘贴 → 旁证只读复核 → 明确指令后开工（四步；含 re-grounding/语言切换/高级功能） |
+| [插件 README](../plugins/dsh-handoff-kit/README.md) | 产品文档 | current | 1.0.0 | 插件使用/安装/开发说明（UI 工作台/中英文切换/项目选择器；签名/策略/回执；批次删除；re-grounding 与路径存在性） |
+| [插件使用说明（标准交接流程）](../plugins/dsh-handoff-kit/USAGE.md) | 使用说明 | current | 1.0.0 | 旧会话生成 → 新会话只粘贴 → 旁证只读复核 → 明确指令后开工（四步；含 re-grounding/语言切换/高级功能） |
 | [插件使用说明（英文）](../plugins/dsh-handoff-kit/USAGE.en.md) | 使用说明 | current | 1.0.0-rc | USAGE.md 英文对照（四步标准交接流程；1.0 公开门面） |
 | [交接包格式规范（英文）](../plugins/dsh-handoff-kit/spec/HANDOFF.md) | 规格 | current | P3 | 1.0 交接包格式规范：批次布局/manifest@1/2/HANDOFF 结构/证据标签/trust；签名 `signature.json`/策略 `policy.json`/回收站（M5/M5b） |
 | [交接包验证规范（英文）](../plugins/dsh-handoff-kit/spec/verify.md) | 规格 | current | P3 | 1.0 验证算法：步骤/finding 码/trust 判定/签名与路径检查/结果级 signature·receipt/CLI 契约（M1/M5/M5b） |
@@ -91,7 +91,7 @@
 | `docs/handoff-kit/acceptance/P3.md`（P3 1.0 验收记录） | 已建 | P3/M6（2026-10-23） |
 | 根/包内 `LICENSE`、`.github/ISSUE_TEMPLATE/`、`.github/workflows/ci.yml`（公开门面/CI） | 已建 | P3/M4（2026-10-23） |
 
-P3 M0–M3 已完成，M4 门面/CI/英文 UI i18n/P2-G1 已完成；`1.0.0-rc.1` 的 npm 发布待用户确认。无需其他待建文档。
+P3 M0–M6 已完成，`1.0.0` 已发布（npm `latest` + tag `v1.0.0`），P3 计划/验收记录冻结。无需其他待建文档。
 
 ## 6. 归档规则
 

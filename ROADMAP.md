@@ -13,7 +13,7 @@
 | P0 | 0.1.x | 手动生成 + 校验闭环 | **done**（0.1.0，2026-10-22） | [P0 实施计划](docs/handoff-kit/design/P0_implementation_plan.md) | [P0 验收记录](docs/handoff-kit/acceptance/P0.md) |
 | P1 | 0.2.x | 真实改动证据 + 消费闭环 + 轻自动 | **done**（0.2.0，2026-10-22；0.2.1 挂账清理） | [P1 实施计划](docs/handoff-kit/design/P1_plan.md) | [P1 验收记录](docs/handoff-kit/acceptance/P1.md) |
 | P2 | 0.3.x | UI 工作台（对接提示词优先） | **done**（0.3.0，2026-10-22；0.3.1 提示词安全修复） | [P2 计划](docs/handoff-kit/design/P2_plan.md) | [P2 验收记录](docs/handoff-kit/acceptance/P2.md) |
-| P3 | 1.0 | 规范与分发 | **进行中**（M0–M5b 完成，2026-10-23；M6 进行中：验收记录已建、代理验收/迁移/回滚通过；**1.0.0 待发布 + UI 抽查**） | [P3 实施计划](docs/handoff-kit/design/P3_plan.md) | [P3 验收记录](docs/handoff-kit/acceptance/P3.md)（frozen） |
+| P3 | 1.0 | 规范与分发 | **done**（1.0.0，2026-10-23；npm `latest` + tag `v1.0.0`；M0–M6 完成） | [P3 实施计划](docs/handoff-kit/design/P3_plan.md)（frozen） | [P3 验收记录](docs/handoff-kit/acceptance/P3.md)（frozen） |
 
 ## P0 — 可用（0.1.x）
 

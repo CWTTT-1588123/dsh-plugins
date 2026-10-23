@@ -13,6 +13,8 @@
 schema 迁移器、跨工具 CLI、GitHub 公开仓库 + npm 发布、签名/审计回执/脱敏策略、批次删除、
 转接增强（re-grounding + 路径存在性）。P0–P2 运行边界不变（零依赖 / 无网络 / 无子进程 /
 无 LLM / 历史批次不原地重写）。详见 [P3 验收记录](docs/handoff-kit/acceptance/P3.md)。
+**发布回执（2026-10-23）**：npm `latest=1.0.0`（tarball 37 文件）、git tag `v1.0.0`
+（指向 `2cd8b40`）、`npx dsh-handoff-kit@1.0.0 verify` 真实批次 exit 0/trust=verified。
 
 ### Added
 
