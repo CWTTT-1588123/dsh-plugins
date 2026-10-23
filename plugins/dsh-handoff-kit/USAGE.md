@@ -1,6 +1,6 @@
 # dsh-handoff-kit 使用说明：标准交接流程
 
-<!-- docs-meta: status=current; phase=P2; verified=c5fe455@2026-10-22; tracks=-; supersedes=-; superseded-by=- -->
+<!-- docs-meta: status=current; phase=P2; verified=91a4fae@2026-10-23; tracks=-; supersedes=-; superseded-by=- -->
 
 > 面向用户的**操作顺序**（插件 ≥0.3.1）。UI 入口：对话输入框左侧「交接」按钮。
 > 核心原则：**交接包只提供上下文，不是立即开工的许可。**
@@ -61,6 +61,12 @@
   属**输入缺口**（生成器不编造），不是包损坏。
 - **找不到批次（`HANDOFF_BATCH_NOT_FOUND`）**：新会话工作区不是交接包所属项目；
   或包在 `target=workspace` 而非 `user`。
+- **界面语言不对 / 想切回中文**：界面默认跟随浏览器语言（中文浏览器显示中文）；也可在工作台
+  「项目/会话」栏或浮层面板顶部的 **中文 / English** 按钮手动切换，选择会记在本地
+  （`dsh.handoff-kit.locale`）。
+- **添加/更换 git remote 后看不到旧批次**：项目 key 会变；工作台会以「历史项目（只读）」分组
+  显示旧批次，显式 `handoff_load batchId=...` 也会只读回退并给出 `PROJECT_KEY_FALLBACK` 警告；
+  写操作仍只写当前 key。
 - **同一批次再验变 stale**：只要被记录的仓库文件变过就会出现；这是正确的漂移检测。
 
 ## 4. 相关文档

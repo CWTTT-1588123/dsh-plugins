@@ -1,11 +1,20 @@
 # Changelog
 
-<!-- docs-meta: status=current; phase=cross; verified=3e446d4@2026-10-23; tracks=-; supersedes=-; superseded-by=- -->
+<!-- docs-meta: status=current; phase=cross; verified=91a4fae@2026-10-23; tracks=-; supersedes=-; superseded-by=- -->
 
 格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)；
 版本按 [ROADMAP](ROADMAP.md) 阶段映射（P0 = 0.1.x）。
 
 ## [Unreleased]
+
+### Fixed
+
+- **中文界面回归（rc.1 发布后发现）**：语言探测改为「用户显式偏好 > 浏览器 `zh*` > 页面
+  `document.lang` > 英文」；新增工作台/浮层面板的 **中文 / English** 切换（即时生效，记在
+  `localStorage: dsh.handoff-kit.locale`）。
+- **projectKey 变化后旧批次不可见**：添加/更换 git remote 会改变 project key；显式 `batchId` 的
+  `load`/`verify` 增加跨 project key **只读**回退（`PROJECT_KEY_FALLBACK` 警告，不降级 trust），
+  工作台在当前 key 0 批次时按 key 分组显示历史批次（只读横幅、禁用继续交接）；写操作仍只落当前 key。
 
 ## [1.0.0-rc.1] - 2026-10-23
 

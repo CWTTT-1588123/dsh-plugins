@@ -1,6 +1,6 @@
 # dsh-plugins 文档索引（唯一入口）
 
-<!-- docs-meta: status=current; phase=cross; verified=3e446d4@2026-10-23; tracks=-; supersedes=-; superseded-by=- -->
+<!-- docs-meta: status=current; phase=cross; verified=91a4fae@2026-10-23; tracks=-; supersedes=-; superseded-by=- -->
 
 > 状态：**current**（2026-10-22 建立，D1）
 > 读者：用户 + 所有 AI 会话
@@ -63,9 +63,9 @@
 | [P0 验收记录](handoff-kit/acceptance/P0.md) | 验收 | frozen | P0 | P0 L1–L3 证据（批次引用已归档见 GAPS §2） |
 | [P1 验收记录](handoff-kit/acceptance/P1.md) | 验收 | frozen | P1 | P1 M1–M3 + 0.2.1 清理证据 |
 | [P2 验收记录](handoff-kit/acceptance/P2.md) | 验收 | frozen | P2 | P2 U0–U4/L1–L3 浏览器实测证据、已知缺口（0.3.0；§9 为 0.3.1 提示词安全勘误） |
-| [插件 README](../plugins/dsh-handoff-kit/README.md) | 产品文档 | current | 1.0.0-rc | 插件使用/安装/开发说明（含 UI 工作台、提示词安全门、英文优先 i18n 与 P2-G1 项目/会话选择器） |
-| [插件使用说明（标准交接流程）](../plugins/dsh-handoff-kit/USAGE.md) | 使用说明 | current | 0.3.1 | 旧会话生成 → 新会话只粘贴 → 旁证只读复核 → 明确指令后开工（四步） |
-| [插件使用说明（英文）](../plugins/dsh-handoff-kit/USAGE.en.md) | 使用说明 | current | P3 | USAGE.md 英文对照（四步标准交接流程；1.0 公开门面） |
+| [插件 README](../plugins/dsh-handoff-kit/README.md) | 产品文档 | current | 1.0.0-rc | 插件使用/安装/开发说明（含 UI 工作台、提示词安全门、中英文切换、P2-G1 项目/会话选择器、projectKey 历史回退） |
+| [插件使用说明（标准交接流程）](../plugins/dsh-handoff-kit/USAGE.md) | 使用说明 | current | 1.0.0-rc | 旧会话生成 → 新会话只粘贴 → 旁证只读复核 → 明确指令后开工（四步；含语言切换/历史批次说明） |
+| [插件使用说明（英文）](../plugins/dsh-handoff-kit/USAGE.en.md) | 使用说明 | current | 1.0.0-rc | USAGE.md 英文对照（四步标准交接流程；1.0 公开门面） |
 | [交接包格式规范（英文）](../plugins/dsh-handoff-kit/spec/HANDOFF.md) | 规格 | current | P3 | 1.0 交接包格式规范：批次布局/manifest@1/2/HANDOFF 结构/证据标签/trust 语义（M1） |
 | [交接包验证规范（英文）](../plugins/dsh-handoff-kit/spec/verify.md) | 规格 | current | P3 | 1.0 验证算法：步骤/finding 码/trust 判定/CLI 退出码（M1） |
 | [handoff-pack 技能](../plugins/dsh-handoff-kit/skills/handoff-pack/SKILL.md) | 技能 | current | 0.3.1 | 模型使用交接包的流程说明（P2 UI 不改变模型消费路径） |

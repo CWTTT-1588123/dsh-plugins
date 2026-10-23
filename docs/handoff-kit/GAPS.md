@@ -1,6 +1,6 @@
 # dsh-handoff-kit 挂账与边界台账
 
-<!-- docs-meta: status=current; phase=cross; verified=bae5a79@2026-10-23; tracks=-; supersedes=-; superseded-by=- -->
+<!-- docs-meta: status=current; phase=cross; verified=91a4fae@2026-10-23; tracks=-; supersedes=-; superseded-by=- -->
 
 > 版本：v1（2026-10-22）。本文件把 P0/P1 验收记录里的"已知缺口"统一分类，避免"挂账"语义漂移。
 > 分类：**已关闭**（已实现/实测）；**设计边界**（P0/P1 约束或宿主契约，不在本插件内修，需改计划或等宿主）；
@@ -122,3 +122,12 @@ profile `package.json` 手工修复前的备份：`package.json.bak-handoff-rehe
    B. 若无法唯一确定，返回候选列表并提示用 CLI 显式路径或迁移；
    C. 文档记录「添加/更换 remote 会改变 project key」及迁移办法。
    本项列入 M5/M6 收口清单；旧批次当前可用 CLI 显式路径访问。
+
+   **已实现（2026-10-23，提交 `91a4fae`，待 rc.2 发布）**：
+   A 已落地——显式 `batchId` 的 `load`/`verify` 在当前 key 缺失时只读扫描兄弟 project key，
+   唯一命中返回 `PROJECT_KEY_FALLBACK` 结果级警告（不进入 findings/counts，不降级 `trust`，
+   不写文件）；B 已落地——0 命中保持原错误，多命中报 `BATCH_NOT_FOUND` 并列出命中的 key；
+   工作台在 0 批次时用既有 `list all` 只读聚合、按 key 分组并显示「历史项目（只读）」横幅，
+   `继续交接` 在 history 模式禁用（写操作仍只写当前 key）；C 已落地——`spec/HANDOFF.md` §2/§5、
+   `spec/verify.md` §5.3、README/USAGE 补充项目 key 变化与 `PROJECT_KEY_FALLBACK` 说明。
+   验证：301 测试全绿（+11 新 fallback 测试）、`docs:check` 0 error；UI 人工验收待刷新后确认。

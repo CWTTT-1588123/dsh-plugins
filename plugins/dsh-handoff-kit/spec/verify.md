@@ -1,6 +1,6 @@
 # Handoff Package Verification Specification
 
-<!-- docs-meta: status=current; phase=P3; verified=ce3cb8d@2026-10-23; tracks=-; supersedes=-; superseded-by=- -->
+<!-- docs-meta: status=current; phase=P3; verified=91a4fae@2026-10-23; tracks=-; supersedes=-; superseded-by=- -->
 
 > Status: **1.0 draft (P3/M1, 2026-10-23)** — normative for reference verifiers; frozen at 1.0.
 > Companion to [`HANDOFF.md`](HANDOFF.md) (package format). Implemented by `dsh-handoff-kit` (`handoff_pack action=verify`, `handoff_load`).
@@ -154,6 +154,16 @@ Severity and codes are part of the machine contract. Severity changes are breaki
 
 Errors: `MANIFEST_NOT_OBJECT`, `MANIFEST_SCHEMA`, `MANIFEST_SCHEMA_VERSION`, `MANIFEST_BATCH_ID`, `MANIFEST_PROJECT`, `MANIFEST_ARTIFACTS`, `MANIFEST_FILES`, `MANIFEST_LIMITS`.
 Warnings: `MANIFEST_CREATED_AT`, `MANIFEST_GENERATOR`, `MANIFEST_SESSION`, `MANIFEST_SANDBOX`, `MANIFEST_INPUTS`, `MANIFEST_SESSION_TRACE`, `MANIFEST_SCAN`, `MANIFEST_REDACTIONS`, `MANIFEST_WARNINGS`, `MANIFEST_ARTIFACT_ENTRY`, `MANIFEST_FILE_ENTRY`, `MANIFEST_PATH_NOT_TOKENIZED`, `MANIFEST_TARGET`, `MANIFEST_VERSION_BLOCK`, `MANIFEST_CHANGES`, `MANIFEST_FUEL`, `MANIFEST_LINEAGE`.
+
+### 5.3 Result-level warnings (not verification findings)
+
+A consumer may attach warnings to an otherwise successful read. They are returned alongside the
+result (for example a tool result's `warnings` array), are **not** part of
+`verification.findings`, do not affect `verification.counts`, and therefore never change `trust`.
+
+| Code | Meaning |
+|---|---|
+| `PROJECT_KEY_FALLBACK` | An explicit `batchId` was absent under the current project key and was uniquely located **read-only** under a sibling historical project key (for example after the git remote was added or changed). The batch is verified normally; no file is modified and `trust` is unchanged. Zero or multiple sibling hits keep the original `BATCH_NOT_FOUND` error. |
 
 ## 6. Determinism and stability
 
