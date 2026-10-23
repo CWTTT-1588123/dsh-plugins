@@ -1,6 +1,6 @@
 # dsh-handoff-kit P3 设计草案——平台化（1.0，A 档：开源公开产品）
 
-<!-- docs-meta: status=current; phase=P3; verified=7a2ecd9@2026-10-23; tracks=plugins/dsh-handoff-kit/src; supersedes=-; superseded-by=- -->
+<!-- docs-meta: status=current; phase=P3; verified=f162ac1@2026-10-23; tracks=plugins/dsh-handoff-kit/src; supersedes=-; superseded-by=- -->
 
 > 版本：**v1.0（2026-10-23，P3 执行计划；用户批准开工）**。
 > 产品档位：**A —— 开源公开产品**（用户 2026-10-22 两轮对齐确认，决议见 §0.1）。
