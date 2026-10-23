@@ -35,6 +35,7 @@ import {
   validateToolArgs
 } from './contracts.js'
 import { resolveDshHome } from './service.js'
+import { projectKeySlug } from './paths.js'
 
 /** Wire protocol version; a Client from another major refuses to talk. */
 export const UI_RPC_PROTOCOL = 1
@@ -369,6 +370,9 @@ export function createUiRpc({ service, env = {}, ctx } = {}) {
         if (batch === null || typeof batch !== 'object') continue
         const projectKey = projectKeyFromBatchDir(batch.dir, rootDir, batch.batchId)
         if (projectKey === null || projectKey === currentProjectKey) continue
+        // A moved project key keeps the workspace slug; do not mix batches of
+        // unrelated projects that merely share the same handoff root.
+        if (projectKeySlug(projectKey) !== projectKeySlug(currentProjectKey)) continue
         if (!grouped.has(projectKey)) grouped.set(projectKey, [])
         grouped.get(projectKey).push({ ...batch, projectKey })
       }

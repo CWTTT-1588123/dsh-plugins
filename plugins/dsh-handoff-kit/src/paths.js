@@ -84,6 +84,20 @@ export function projectKey({ repoRoot, remoteUrl, workspaceCanonical }) {
   return `${slugifyName(basename(repoRoot))}-${sha256Hex(seed).slice(0, 8)}`
 }
 
+/**
+ * Workspace slug of a project key: `<slug>-<8 hex>`. Used to recognise a
+ * project whose key moved (for example after a git remote was added) without
+ * mixing in unrelated projects that share the same handoff root.
+ * Unknown shapes are returned unchanged.
+ * @param {string} key
+ * @returns {string}
+ */
+export function projectKeySlug(key) {
+  const value = String(key ?? '')
+  const match = /^(.*)-[0-9a-f]{8}$/.exec(value)
+  return match === null ? value : match[1]
+}
+
 function pad2(value) {
   return String(value).padStart(2, '0')
 }

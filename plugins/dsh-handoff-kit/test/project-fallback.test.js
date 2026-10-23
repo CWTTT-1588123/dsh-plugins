@@ -19,6 +19,7 @@ import { ERROR, TOOL_OUTPUT_SCHEMA, validateLoadArgs, validateToolArgs } from '.
 import { createService } from '../src/service.js'
 import { LOAD_OUTPUT_SCHEMA } from '../src/contracts.js'
 import { createUiRpc, projectKeyFromBatchDir } from '../src/ui.js'
+import { projectKeySlug } from '../src/paths.js'
 import { createFakeCtx } from './helpers/fake-ctx.js'
 import {
   FIXED_BATCH_ID,
@@ -167,20 +168,47 @@ test('load without an explicit batch id never crosses project keys', async () =>
 
 test('an ambiguous cross-key batch id keeps BATCH_NOT_FOUND and names the keys', async () => {
   const harness = makeHarness()
-  await orphanOneBatch(harness)
+  const { current } = await orphanOneBatch(harness)
+  const slug = current.project.key.replace(/-[0-9a-f]{8}$/, '')
   const ambiguous = '20260101T000000Z-ffff'
-  harness.fs.addDirectory(`${HANDOFF_ROOT}\\zz-history-one-11111111\\${ambiguous}`)
-  harness.fs.addDirectory(`${HANDOFF_ROOT}\\zz-history-two-22222222\\${ambiguous}`)
+  harness.fs.addDirectory(`${HANDOFF_ROOT}\\${slug}-11111111\\${ambiguous}`)
+  harness.fs.addDirectory(`${HANDOFF_ROOT}\\${slug}-22222222\\${ambiguous}`)
 
   await assert.rejects(
     harness.service.run(validateToolArgs({ action: 'verify', batchId: ambiguous }), harness.exec),
     (error) => {
       assert.equal(error.code, ERROR.BATCH_NOT_FOUND)
-      assert.match(error.message, /zz-history-one-11111111/)
-      assert.match(error.message, /zz-history-two-22222222/)
+      assert.match(error.message, /-11111111/)
+      assert.match(error.message, /-22222222/)
       return true
     }
   )
+})
+
+test('fallback ignores sibling project keys with a different workspace slug', async () => {
+  const harness = makeHarness()
+  const { created, oldKey } = await orphanOneBatch(harness)
+  // A different project sharing the same handoff root, with the same batch id.
+  harness.fs.addDirectory(`${HANDOFF_ROOT}\\zz-other-99999999\\${created.batchId}`)
+  const writesBefore = harness.fs.writeCount()
+
+  const result = await harness.service.load(validateLoadArgs({ batchId: created.batchId }), harness.exec)
+  assert.equal(result.dir, `$DSH_HOME/handoff/${oldKey}/${created.batchId}`)
+  assert.ok(result.warnings.some((entry) => entry.code === 'PROJECT_KEY_FALLBACK'))
+  assert.equal(harness.fs.writeCount(), writesBefore)
+
+  const rpc = createUiRpc({ service: harness.service, env: { DSH_HOME: DSH_HOME_TEST }, ctx: harness.ctx })
+  const value = (await (await rpc.handle(rpcRequest('state', {}))).json()).value
+  assert.deepEqual(value.history.projectKeys, [oldKey])
+  assert.equal(value.batches.length, 1)
+})
+
+test('projectKeySlug strips only the trailing 8-hex hash', () => {
+  assert.equal(projectKeySlug('dsh-plugins-cb7aa4e5'), 'dsh-plugins')
+  assert.equal(projectKeySlug('my-repo-name-0123abcd'), 'my-repo-name')
+  assert.equal(projectKeySlug('no-hash'), 'no-hash')
+  assert.equal(projectKeySlug('nothex-zzzzzzzz'), 'nothex-zzzzzzzz')
+  assert.equal(projectKeySlug(''), '')
 })
 
 test('projectKeyFromBatchDir only accepts tokens under the given root', () => {

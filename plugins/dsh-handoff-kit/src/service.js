@@ -50,6 +50,7 @@ import {
   makeBatchId,
   normalizeArtifactPath,
   projectKey,
+  projectKeySlug,
   resolveArtifact,
   resolveInside,
   sha256Hex,
@@ -1255,7 +1256,10 @@ export function createService({
           typeof entry.name === 'string' &&
           entry.name !== '' &&
           entry.name !== projectKeyName &&
-          !entry.name.startsWith('.')
+          !entry.name.startsWith('.') &&
+          // Only the same workspace slug can be this project under an older
+          // seed; unrelated projects sharing the handoff root are ignored.
+          projectKeySlug(entry.name) === projectKeySlug(projectKeyName)
       )
       .map((entry) => entry.name)
       .sort()
