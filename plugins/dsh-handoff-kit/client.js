@@ -37,6 +37,11 @@ window.__ModuleLoader__.load({
      */
     const SESSION_HINT_KEY = 'dsh.handoff-kit.lastSessionId'
     /**
+     * Explicit UI language preference (`zh` / `en`). Set by the in-UI switch;
+     * it outranks environment detection and survives reloads.
+     */
+    const LOCALE_KEY = 'dsh.handoff-kit.locale'
+    /**
      * Sessions this page has seen, newest first. P2-G1: the workbench is a
      * root-scoped surface with no session binding of its own, so it shows an
      * explicit project/session selector backed by this (client-only) list plus
@@ -60,6 +65,9 @@ window.__ModuleLoader__.load({
       "app.subtitle": "Create and load session handoff packages",
       "app.workbenchTitle": "Handoff Workbench",
       "app.composerTitle": "Handoff: create or load handoff packages",
+      "locale.label": "Language",
+      "locale.zh": "Chinese",
+      "locale.en": "English",
       "common.close": "Close",
       "common.cancel": "Cancel",
       "common.refresh": "Refresh",
@@ -183,6 +191,9 @@ window.__ModuleLoader__.load({
       "workbench.backToConversation": "Back to conversation",
       "workbench.description": "A handoff package is the evidence behind the new-session opening prompt; write actions (create / continue) show the target directory first and run only after you click.",
       "workbench.sessionUnbound": "unbound",
+      "history.badge": "Historical project (read-only)",
+      "history.notice": "Current project {project} has no batches. Showing {count} historical batch(es) from project key(s) {keys} read-only; new batches are still written to the current project key.",
+      "history.continueDisabled": "Continue handoff is unavailable while viewing historical batches (they belong to another project key). Create a new batch to start lineage in the current project.",
       "selector.title": "Project / session",
       "selector.hint": "Choose the session whose workspace this workbench reads and writes; the project follows the session. Host default resolves the newest live session.",
       "selector.hostDefault": "Host default (newest live session)",
@@ -205,6 +216,9 @@ window.__ModuleLoader__.load({
       "app.subtitle": "生成 / 载入会话交接包",
       "app.workbenchTitle": "交接工作台",
       "app.composerTitle": "交接：生成 / 载入交接包",
+      "locale.label": "语言",
+      "locale.zh": "中文",
+      "locale.en": "English",
       "common.close": "关闭",
       "common.cancel": "取消",
       "common.refresh": "刷新",
@@ -328,6 +342,9 @@ window.__ModuleLoader__.load({
       "workbench.backToConversation": "返回对话",
       "workbench.description": "交接包是“新会话开场提示词”的后端证据；写操作（生成 / 继续交接）会先显示目标目录并在点击后执行。",
       "workbench.sessionUnbound": "未绑定",
+      "history.badge": "历史项目（只读）",
+      "history.notice": "当前项目 {project} 没有批次，只读显示 {keys} 的 {count} 个历史批次；新建批次仍写入当前项目 key。",
+      "history.continueDisabled": "查看历史批次时无法继续交接（它们属于其他项目 key）。如需在当前项目建立血缘，请新建批次。",
       "selector.title": "项目 / 会话",
       "selector.hint": "选择本工作台读写的工作区所属会话；项目随会话确定。选「宿主默认」则由宿主解析最新活动会话。",
       "selector.hostDefault": "宿主默认（最新活动会话）",
@@ -353,40 +370,71 @@ window.__ModuleLoader__.load({
     }
 
     /**
-     * Resolve the UI language from the page/browser.
-     * `document.documentElement.lang` wins when the shell sets it; otherwise
-     * `navigator.languages` then `navigator.language` decide. Unknown -> en.
+     * Resolve the UI language.
+     *
+     * Priority (P3 follow-up): an explicit saved preference wins, then a `zh*`
+     * entry in `navigator.languages` / `navigator.language` (a Chinese browser
+     * must show Chinese even when the shell pins `<html lang="en">`), then
+     * `document.documentElement.lang`, then English.
+     *
      * @param {any} [nav] navigator (injectable for tests)
      * @param {any} [doc] document (injectable for tests)
+     * @param {string|null} [stored] persisted `zh` / `en` preference
      */
-    function detectLocale(nav, doc) {
-      try {
-        const fromDocument = doc !== undefined && doc !== null && doc.documentElement ? localeFromTag(doc.documentElement.lang) : null
-        if (fromDocument !== null) return fromDocument
-      } catch {
-        /* a restricted document object must not break the UI */
-      }
+    function detectLocale(nav, doc, stored) {
+      const saved = localeFromTag(stored)
+      if (saved !== null) return saved
       try {
         if (nav !== undefined && nav !== null) {
+          const tags = []
           if (Array.isArray(nav.languages)) {
-            for (const tag of nav.languages) {
-              const fromTag = localeFromTag(tag)
-              if (fromTag !== null) return fromTag
-            }
+            for (const tag of nav.languages) tags.push(tag)
           }
-          const fromLanguage = localeFromTag(nav.language)
-          if (fromLanguage !== null) return fromLanguage
+          if (typeof nav.language === 'string') tags.push(nav.language)
+          for (const tag of tags) {
+            if (typeof tag === 'string' && tag.toLowerCase().startsWith('zh')) return 'zh'
+          }
         }
       } catch {
-        /* the same applies to navigator */
+        /* a restricted navigator object must not break the UI */
+      }
+      try {
+        const fromDocument =
+          doc !== undefined && doc !== null && doc.documentElement
+            ? localeFromTag(doc.documentElement.lang)
+            : null
+        if (fromDocument !== null) return fromDocument
+      } catch {
+        /* the same applies to document */
       }
       return 'en'
     }
 
-    const currentLocale = detectLocale(
+    /** Explicit saved language preference (`zh` / `en`), or null when unset. */
+    function storedLocale() {
+      const raw = storageGet(storageRef(), LOCALE_KEY)
+      return raw === 'zh' || raw === 'en' ? raw : null
+    }
+
+    let currentLocale = detectLocale(
       typeof navigator === 'undefined' ? undefined : navigator,
-      typeof document === 'undefined' ? undefined : document
+      typeof document === 'undefined' ? undefined : document,
+      storedLocale()
     )
+
+    /**
+     * Switch the UI language immediately (no reload) and remember the explicit
+     * preference. Every mounted surface re-renders through the shared store.
+     * @param {'zh'|'en'|string} next
+     */
+    function setLocale(next) {
+      const target = next === 'zh' ? 'zh' : 'en'
+      if (currentLocale !== target) {
+        currentLocale = target
+        set({ locale: target })
+      }
+      storageSet(storageRef(), LOCALE_KEY, target)
+    }
 
     /**
      * Render one message in a given locale, filling `{name}` placeholders.
@@ -440,6 +488,7 @@ window.__ModuleLoader__.load({
       version: 0,
       open: false,
       tab: 'create',
+      locale: currentLocale,
       sessionId: undefined,
       sessionTitle: '',
       inputActions: null,
@@ -850,6 +899,14 @@ window.__ModuleLoader__.load({
     // ------------------------------------------------- continue (append/update)
     function openContinue(mode) {
       const batches = store.state !== null && Array.isArray(store.state.batches) ? store.state.batches : []
+      // A historical (other project key) batch cannot be the lineage base: the
+      // write would either fail or imply lineage across project keys, so the
+      // action is refused rather than silently re-targeted.
+      const history = store.state !== null && store.state !== undefined ? store.state.history : null
+      if (history !== null && history !== undefined && history.active === true) {
+        showToast(t('history.continueDisabled'))
+        return
+      }
       set({
         continueOpen: true,
         continueMode: mode === 'update' ? 'update' : 'append',
@@ -956,6 +1013,7 @@ window.__ModuleLoader__.load({
         'button',
         {
           type: 'button',
+          'data-testid': props.testId,
           disabled,
           title: props.title,
           onClick: disabled ? undefined : props.onClick,
@@ -1135,6 +1193,54 @@ window.__ModuleLoader__.load({
       )
     }
 
+    /**
+     * In-UI language switch (Chinese / English). The choice is explicit: it
+     * beats browser/page detection and is persisted, so a Chinese user can
+     * keep the UI Chinese even when the shell serves `<html lang="en">`.
+     */
+    function LocaleToggle() {
+      useStoreVersion()
+      const option = (locale) =>
+        h(
+          'button',
+          {
+            type: 'button',
+            key: locale,
+            'data-testid': `handoff-locale-${locale}`,
+            'aria-pressed': currentLocale === locale,
+            onClick: () => setLocale(locale),
+            style: {
+              height: 24,
+              padding: '0 8px',
+              borderRadius: 12,
+              border: `1px solid ${currentLocale === locale ? T.brand : T.border1}`,
+              background:
+                currentLocale === locale
+                  ? 'color-mix(in srgb, var(--dsw-alias-brand-primary) 14%, transparent)'
+                  : 'transparent',
+              color: currentLocale === locale ? T.brand : T.text2,
+              fontFamily: FONT,
+              fontSize: 11.5,
+              lineHeight: '1',
+              cursor: 'pointer',
+              whiteSpace: 'nowrap'
+            }
+          },
+          t(locale === 'zh' ? 'locale.zh' : 'locale.en')
+        )
+      return h(
+        'div',
+        {
+          'data-testid': 'handoff-locale-toggle',
+          role: 'group',
+          'aria-label': t('locale.label'),
+          style: { display: 'inline-flex', alignItems: 'center', gap: 4, flex: '0 0 auto' }
+        },
+        option('zh'),
+        option('en')
+      )
+    }
+
     // ------------------------------------------------------------- glyph
     function HandoffGlyph({ size, dim }) {
       const edge = typeof size === 'number' ? size : 16
@@ -1165,6 +1271,7 @@ window.__ModuleLoader__.load({
      * height; opens the floating panel and remembers this session's context.
      */
     function ComposerButton(props) {
+      useStoreVersion()
       const [hover, setHover] = React.useState(false)
       const sessionTitle =
         typeof props.useSessions === 'function'
@@ -1616,11 +1723,114 @@ window.__ModuleLoader__.load({
       )
     }
 
+    /** Group batches by project key (the read-only historical list is grouped). */
+    function groupBatchesByProject(batches) {
+      const groups = []
+      const index = new Map()
+      for (const batch of Array.isArray(batches) ? batches : []) {
+        if (batch === null || typeof batch !== 'object') continue
+        const projectKey = typeof batch.projectKey === 'string' ? batch.projectKey : ''
+        if (!index.has(projectKey)) {
+          const group = { projectKey, batches: [] }
+          index.set(projectKey, group)
+          groups.push(group)
+        }
+        index.get(projectKey).batches.push(batch)
+      }
+      return groups
+    }
+
+    /**
+     * Read-only banner shown when the workbench list fell back to historical
+     * project keys (remote-seeded project key changed). Writes still target the
+     * current project key, which the copy states explicitly.
+     */
+    function HistoryNotice({ state }) {
+      useStoreVersion()
+      const history =
+        state !== null &&
+        state !== undefined &&
+        state.history !== null &&
+        state.history !== undefined &&
+        state.history.active === true
+          ? state.history
+          : null
+      if (history === null) return null
+      const projectKeys = Array.isArray(history.projectKeys) ? history.projectKeys : []
+      const keys = projectKeys.join(', ')
+      const count = Array.isArray(state.batches) ? state.batches.length : 0
+      return h(
+        'div',
+        {
+          'data-testid': 'handoff-history-notice',
+          style: {
+            margin: '0 0 10px',
+            padding: '8px 11px',
+            border: `1px solid ${T.warn}`,
+            borderRadius: 8,
+            background: 'color-mix(in srgb, var(--dsw-alias-state-warn-primary) 10%, transparent)',
+            fontFamily: FONT,
+            fontSize: 11.5,
+            lineHeight: 1.6,
+            color: T.text
+          }
+        },
+        h(
+          'div',
+          { style: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3, flexWrap: 'wrap' } },
+          h(Badge, { text: t('history.badge'), color: T.warn }),
+          h('span', { style: { fontFamily: MONO, fontSize: 10.5, color: T.text2, overflowWrap: 'anywhere' } }, keys)
+        ),
+        h('div', null, t('history.notice', { project: history.currentProjectKey ?? '—', count, keys }))
+      )
+    }
+
     /** The batch list shared by the Load tab and the workbench page. */
     function BatchList({ maxHeight }) {
       useStoreVersion()
       const state = store.state
       const batches = state !== null && Array.isArray(state.batches) ? state.batches : []
+      const historyActive =
+        state !== null &&
+        state !== undefined &&
+        state.history !== null &&
+        state.history !== undefined &&
+        state.history.active === true
+      const groups = historyActive ? groupBatchesByProject(batches) : [{ projectKey: '', batches }]
+      const batchButton = (batch) =>
+        h(
+          'button',
+          {
+            key: batch.batchId,
+            type: 'button',
+            onClick: () => void performDetail(batch.batchId),
+            style: {
+              display: 'block',
+              width: '100%',
+              textAlign: 'left',
+              border: 'none',
+              borderLeft: `3px solid ${batch.batchId === store.detailBatchId ? T.brand : 'transparent'}`,
+              background: batch.batchId === store.detailBatchId ? T.layer1 : 'transparent',
+              padding: '7px 10px',
+              cursor: 'pointer'
+            }
+          },
+          h('div', { style: { fontFamily: MONO, fontSize: 11.5, color: T.text } }, batch.batchId),
+          h(
+            'div',
+            {
+              style: {
+                fontFamily: FONT,
+                fontSize: 11,
+                color: T.text2,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap'
+              }
+            },
+            `${batch.title !== null && batch.title !== undefined ? batch.title : t('batchlist.untitled')} · ${formatTime(batch.createdAt)}`
+          )
+        )
       return h(
         'div',
         {
@@ -1631,39 +1841,33 @@ window.__ModuleLoader__.load({
             padding: '6px 0'
           }
         },
-        batches.map((batch) =>
+        groups.map((group) =>
           h(
-            'button',
-            {
-              key: batch.batchId,
-              type: 'button',
-              onClick: () => void performDetail(batch.batchId),
-              style: {
-                display: 'block',
-                width: '100%',
-                textAlign: 'left',
-                border: 'none',
-                borderLeft: `3px solid ${batch.batchId === store.detailBatchId ? T.brand : 'transparent'}`,
-                background: batch.batchId === store.detailBatchId ? T.layer1 : 'transparent',
-                padding: '7px 10px',
-                cursor: 'pointer'
-              }
-            },
-            h('div', { style: { fontFamily: MONO, fontSize: 11.5, color: T.text } }, batch.batchId),
-            h(
-              'div',
-              {
-                style: {
-                  fontFamily: FONT,
-                  fontSize: 11,
-                  color: T.text2,
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap'
-                }
-              },
-              `${batch.title !== null && batch.title !== undefined ? batch.title : t('batchlist.untitled')} · ${formatTime(batch.createdAt)}`
-            )
+            'div',
+            { key: `group-${group.projectKey}`, 'data-testid': historyActive ? 'handoff-history-group' : undefined },
+            historyActive
+              ? h(
+                  'div',
+                  {
+                    style: {
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      flexWrap: 'wrap',
+                      padding: '6px 10px 4px',
+                      borderTop: `1px solid ${T.border1}`,
+                      background: T.layer2
+                    }
+                  },
+                  h(
+                    'span',
+                    { style: { fontFamily: MONO, fontSize: 10.5, color: T.text2, overflowWrap: 'anywhere' } },
+                    group.projectKey
+                  ),
+                  h(Badge, { text: t('history.badge'), color: T.warn })
+                )
+              : null,
+            group.batches.map((batch) => batchButton(batch))
           )
         )
       )
@@ -1698,12 +1902,17 @@ window.__ModuleLoader__.load({
       }
       return h(
         'div',
-        { style: { display: 'grid', gridTemplateColumns: 'minmax(200px, 250px) 1fr', minHeight: 280 } },
-        h(BatchList, { maxHeight: '52vh' }),
+        null,
+        h('div', { style: { padding: '10px 12px 0' } }, h(HistoryNotice, { state })),
         h(
           'div',
-          { style: { padding: '10px 14px 14px', maxHeight: '52vh', overflowY: 'auto' } },
-          h(DetailView, { detail: store.detail, loading: store.detailLoading, error: store.detailError })
+          { style: { display: 'grid', gridTemplateColumns: 'minmax(200px, 250px) 1fr', minHeight: 280 } },
+          h(BatchList, { maxHeight: '52vh' }),
+          h(
+            'div',
+            { style: { padding: '10px 14px 14px', maxHeight: '52vh', overflowY: 'auto' } },
+            h(DetailView, { detail: store.detail, loading: store.detailLoading, error: store.detailError })
+          )
         )
       )
     }
@@ -2012,6 +2221,7 @@ window.__ModuleLoader__.load({
           h('div', { style: { fontFamily: FONT, fontSize: 13.5, fontWeight: 600 } }, t('app.title')),
           h('div', { style: { fontFamily: FONT, fontSize: 11.5, color: T.text2 } }, t('app.subtitle'))
         ),
+        h(LocaleToggle),
         h(
           'button',
           {
@@ -2174,7 +2384,8 @@ window.__ModuleLoader__.load({
             : h(Badge, {
                 text: view.fallback ? t('selector.fallbackBadge') : t('selector.live'),
                 color: view.fallback ? T.warn : T.success
-              })
+              }),
+          h(LocaleToggle)
         ),
         h('span', null, t('selector.hint')),
         view === null
@@ -2247,6 +2458,12 @@ window.__ModuleLoader__.load({
           if (store.detailBatchId !== '') void performDetail(store.detailBatchId)
         })
       }
+      const historyActive =
+        state !== null &&
+        state !== undefined &&
+        state.history !== null &&
+        state.history !== undefined &&
+        state.history.active === true
       return h(
         'div',
         {
@@ -2282,10 +2499,11 @@ window.__ModuleLoader__.load({
                 openPanel()
               }
             }, t('tab.create')),
-            h(Button, { onClick: () => openContinue('append') }, t('continue.title')),
+            h(Button, { testId: 'handoff-continue', onClick: () => openContinue('append'), disabled: historyActive, title: historyActive ? t('history.continueDisabled') : undefined }, t('continue.title')),
             h(Button, { onClick: () => selectMainPanel('conversation') }, t('workbench.backToConversation'))
           ),
           h(ProjectSessionBar, { state }),
+          h(HistoryNotice, { state }),
           h(
             'p',
             { style: { margin: '2px 0 14px', color: T.text2, fontSize: 12.5, lineHeight: 1.7 } },
@@ -2364,7 +2582,9 @@ window.__ModuleLoader__.load({
       _test: {
         messages: MESSAGES,
         locale: () => currentLocale,
+        localeKey: LOCALE_KEY,
         detectLocale,
+        setLocale,
         formatMessage,
         t,
         projectSessionView,
@@ -2374,6 +2594,7 @@ window.__ModuleLoader__.load({
         rememberSession,
         shortSessionId,
         bindSession,
+        groupBatchesByProject,
         store
       }
     }

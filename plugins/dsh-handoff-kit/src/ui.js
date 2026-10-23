@@ -302,6 +302,33 @@ export function renderOpeningPrompt(load) {
 }
 
 /**
+ * Project key encoded in a tokenized batch directory.
+ *
+ * `list all` returns `dir` tokens of the shape `<root>/<projectKey>/<batchId>`
+ * for every project key under the same handoff root, which is the only
+ * read-only way the Host exposes sibling projects. Deriving the key from the
+ * token (instead of adding fields to the tool output contract) keeps the
+ * `handoff_pack` list schema frozen.
+ *
+ * @param {unknown} batchDir tokenized batch dir (e.g. `$DSH_HOME/handoff/k/id`)
+ * @param {unknown} rootDir tokenized handoff root (the `list all` result dir)
+ * @param {unknown} batchId the batch id the token must end with
+ * @returns {string|null} the project key, or null when the token does not fit
+ */
+export function projectKeyFromBatchDir(batchDir, rootDir, batchId) {
+  if (typeof batchDir !== 'string' || batchDir === '') return null
+  if (typeof rootDir !== 'string' || rootDir === '') return null
+  if (typeof batchId !== 'string' || batchId === '') return null
+  const prefix = rootDir.endsWith('/') ? rootDir : `${rootDir}/`
+  if (!batchDir.startsWith(prefix)) return null
+  const suffix = `/${batchId}`
+  if (!batchDir.endsWith(suffix)) return null
+  const projectKey = batchDir.slice(prefix.length, batchDir.length - suffix.length)
+  if (projectKey === '' || projectKey.includes('/')) return null
+  return projectKey
+}
+
+/**
  * Create the RPC dispatcher/handler pair.
  *
  * @param {{
@@ -317,7 +344,7 @@ export function createUiRpc({ service, env = {}, ctx } = {}) {
   }
   const serviceCtx = ctx ?? {}
 
-  /** `state`: read-only project + batches + roots. */
+  /** `state`: read-only project + batches + roots (+ historical batches). */
   async function state(params, signal) {
     const target = consumeTarget(params)
     const { session, workspaceRoot } = resolveWorkspace(serviceCtx, consumeSessionId(params))
@@ -325,17 +352,51 @@ export function createUiRpc({ service, env = {}, ctx } = {}) {
     const raw = { action: 'list', target }
     if (params.all === true) raw.all = true
     const list = await service.run(validateToolArgs(raw), exec)
+    const currentProjectKey = typeof list.project?.key === 'string' ? list.project.key : null
+    let batches = Array.isArray(list.batches) ? list.batches : []
+    const warnings = Array.isArray(list.warnings) ? [...list.warnings] : []
+    let history = null
+    // A remote-seeded project key changes when the repository gains/changes a
+    // git remote, orphaning earlier batches under the old key. When the current
+    // key has none, surface the sibling-key batches read-only (grouped by
+    // project key) instead of an empty workbench. Writes are untouched:
+    // create/append/update still resolve the current project key.
+    if (batches.length === 0 && params.all !== true) {
+      const aggregate = await service.run(validateToolArgs({ action: 'list', target, all: true }), exec)
+      const rootDir = typeof aggregate.dir === 'string' ? aggregate.dir : ''
+      const grouped = new Map()
+      for (const batch of Array.isArray(aggregate.batches) ? aggregate.batches : []) {
+        if (batch === null || typeof batch !== 'object') continue
+        const projectKey = projectKeyFromBatchDir(batch.dir, rootDir, batch.batchId)
+        if (projectKey === null || projectKey === currentProjectKey) continue
+        if (!grouped.has(projectKey)) grouped.set(projectKey, [])
+        grouped.get(projectKey).push({ ...batch, projectKey })
+      }
+      if (grouped.size > 0) {
+        const projectKeys = [...grouped.keys()].sort()
+        batches = projectKeys.flatMap((projectKey) => grouped.get(projectKey))
+        history = { active: true, currentProjectKey, projectKeys, dir: rootDir }
+        warnings.push({
+          code: 'PROJECT_KEY_FALLBACK',
+          detail:
+            `current project key ${currentProjectKey ?? '(unknown)'} has no batches; showing ` +
+            `${batches.length} historical batch(es) from project key(s) ${projectKeys.join(', ')} read-only; ` +
+            'new batches are still written to the current project key'
+        })
+      }
+    }
     return {
       protocol: UI_RPC_PROTOCOL,
       target,
       dir: list.dir,
       project: list.project,
-      batches: list.batches,
+      batches,
       totals: list.totals,
-      warnings: list.warnings,
+      warnings,
       limits: list.limits,
       next: list.next,
       roots: rootsOf(env, workspaceRoot),
+      history,
       session: {
         id: typeof exec.agent?.id === 'string' ? exec.agent.id : null,
         live: session !== undefined,
@@ -547,4 +608,11 @@ export function registerUiRpc(ctx, service, options = {}) {
 }
 
 /** Internal helpers exposed for tests (not part of the plugin contract). */
-export const _test = { execForSession, consumeTarget, consumeSessionId, rootsOf, resolveWorkspace }
+export const _test = {
+  execForSession,
+  consumeTarget,
+  consumeSessionId,
+  rootsOf,
+  resolveWorkspace,
+  projectKeyFromBatchDir
+}

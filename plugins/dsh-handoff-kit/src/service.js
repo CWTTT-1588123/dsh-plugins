@@ -1227,18 +1227,95 @@ export function createService({
     })
   }
 
-  async function locateBatch({ args, root, projectKeyName, io }) {
+  /**
+   * Read-only search for one explicit batch id under sibling project keys.
+   *
+   * A project key derives from the git remote when one exists, so adding or
+   * changing a remote silently moves the current key and made previously
+   * generated batches unreachable. The search never writes and never leaves
+   * the configured handoff root; callers decide whether a unique hit is
+   * acceptable (the UI and `verify`/`load` opt in, writes never do).
+   *
+   * @param {{root: string, projectKeyName: string, batchId: string, io: object}} input
+   * @returns {Promise<{projectKey: string, projectDir: string, dir: string}[]>}
+   */
+  async function findSiblingBatchDirs({ root, projectKeyName, batchId, io }) {
+    let entries = []
+    try {
+      entries = await io.listDir(root)
+    } catch {
+      return []
+    }
+    const projectKeys = entries
+      .filter(
+        (entry) =>
+          entry !== null &&
+          typeof entry === 'object' &&
+          entry.type === 'directory' &&
+          typeof entry.name === 'string' &&
+          entry.name !== '' &&
+          entry.name !== projectKeyName &&
+          !entry.name.startsWith('.')
+      )
+      .map((entry) => entry.name)
+      .sort()
+    const matches = []
+    for (const projectKey of projectKeys) {
+      const projectDir = join(root, projectKey)
+      const dir = join(projectDir, batchId)
+      let info
+      try {
+        info = await io.lstat(dir)
+      } catch {
+        continue
+      }
+      if (info !== undefined) matches.push({ projectKey, projectDir, dir })
+    }
+    return matches
+  }
+
+  /**
+   * Locate a batch under the current project key.
+   *
+   * With `allowProjectFallback` an explicit batch id that is absent under the
+   * current key is searched read-only across sibling project keys under the
+   * same root: a unique hit is returned with a `fallback` descriptor (the
+   * caller surfaces `PROJECT_KEY_FALLBACK`); zero or several hits keep the
+   * original `BATCH_NOT_FOUND` error semantics. The implicit "newest batch"
+   * path never falls back.
+   */
+  async function locateBatch({ args, root, projectKeyName, io, allowProjectFallback = false }) {
     const projectDir = join(root, projectKeyName)
     if (args.batchId !== undefined) {
       const dir = join(projectDir, args.batchId)
       const info = await io.lstat(dir)
-      if (info === undefined) {
-        throw handoffError(
-          ERROR.BATCH_NOT_FOUND,
-          `batch ${args.batchId} not found under ${projectDir}; run handoff_pack action=list`
-        )
+      if (info !== undefined) {
+        return { batchId: args.batchId, dir, projectDir }
       }
-      return { batchId: args.batchId, dir, projectDir }
+      if (allowProjectFallback === true) {
+        const matches = await findSiblingBatchDirs({ root, projectKeyName, batchId: args.batchId, io })
+        if (matches.length === 1) {
+          const [match] = matches
+          return {
+            batchId: args.batchId,
+            dir: match.dir,
+            projectDir: match.projectDir,
+            fallback: { projectKey: match.projectKey }
+          }
+        }
+        if (matches.length > 1) {
+          throw handoffError(
+            ERROR.BATCH_NOT_FOUND,
+            `batch ${args.batchId} is not under project ${projectKeyName} and exists under ` +
+              `${matches.length} sibling project keys (${matches.map((match) => match.projectKey).join(', ')}); ` +
+              'pass an explicit batch path/root instead'
+          )
+        }
+      }
+      throw handoffError(
+        ERROR.BATCH_NOT_FOUND,
+        `batch ${args.batchId} not found under ${projectDir}; run handoff_pack action=list`
+      )
     }
     let entries = []
     try {
@@ -1260,6 +1337,16 @@ export function createService({
       )
     }
     return { batchId: batchIds[0], dir: join(projectDir, batchIds[0]), projectDir }
+  }
+
+  /** Deterministic `PROJECT_KEY_FALLBACK` warning shared by load and verify. */
+  function projectFallbackWarning({ batchId, projectKeyName, fallback, dirToken }) {
+    return {
+      code: 'PROJECT_KEY_FALLBACK',
+      detail:
+        `batch ${batchId} is not under the current project key ${projectKeyName}; ` +
+        `loaded read-only from historical project key ${fallback.projectKey} (${dirToken})`
+    }
   }
 
   /** Hash every artifact recorded in the manifest and reconcile SHA256SUMS. */
@@ -1444,7 +1531,15 @@ export function createService({
     const io = ioFor(exec?.signal)
     const root = handoffRootFor(args.target, context)
     const projectInfo = await resolveProject(context, io)
-    const located = await locateBatch({ args, root, projectKeyName: projectInfo.project.key, io })
+    const located = await locateBatch({
+      args,
+      root,
+      projectKeyName: projectInfo.project.key,
+      io,
+      // Explicit verify ids may live under a historical project key (the key
+      // is remote-seeded); the fallback is read-only and reported as a warning.
+      allowProjectFallback: args.batchId !== undefined
+    })
     const findings = []
     let manifest = null
     try {
@@ -1480,6 +1575,17 @@ export function createService({
     const warnings = sorted.filter((finding) => finding.severity === 'warn').length
     const checkedAt = now().toISOString()
     const dirToken = tokenizePath(located.dir, context.contexts)
+    const fallbackWarnings =
+      located.fallback === undefined
+        ? []
+        : [
+            projectFallbackWarning({
+              batchId: located.batchId,
+              projectKeyName: projectInfo.project.key,
+              fallback: located.fallback,
+              dirToken
+            })
+          ]
     const verification = {
       ok: errors === 0,
       batchId: located.batchId,
@@ -1505,7 +1611,7 @@ export function createService({
           : 0,
         warnings
       }),
-      warnings: [],
+      warnings: fallbackWarnings,
       verification,
       next:
         errors === 0
@@ -1688,13 +1794,26 @@ export function createService({
         args,
         root,
         projectKeyName: projectInfo.project.key,
-        io
+        io,
+        // Explicit load ids may live under a historical project key (the key is
+        // remote-seeded). Loading stays read-only; the caller gets a warning.
+        allowProjectFallback: true
       })
     } catch (error) {
       throw handoffError(ERROR.RESUME_NOT_FOUND, `${errorMessageOf(error)}; run handoff_pack action=list`)
     }
     const dirToken = tokenizePath(located.dir, context.contexts)
     const displayDir = await displayOf(located.dir)
+    if (located.fallback !== undefined) {
+      warnings.push(
+        projectFallbackWarning({
+          batchId: located.batchId,
+          projectKeyName: projectInfo.project.key,
+          fallback: located.fallback,
+          dirToken
+        })
+      )
+    }
     let verification
     if (args.verifyFirst !== false) {
       const verifyResult = await runVerify(

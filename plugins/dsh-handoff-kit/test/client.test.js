@@ -32,6 +32,7 @@ function messagesBlock(marker) {
 
 const EN = messagesBlock('en')
 const ZH = messagesBlock('zh')
+const EN_HISTORY_CONTINUE_DISABLED = EN.messages['history.continueDisabled']
 
 /**
  * Evaluate client.js and return the registered module definition.
@@ -120,10 +121,11 @@ function renderReact() {
   }
 }
 
-/** Collect visible strings and test ids from a rendered element tree. */
+/** Collect visible strings, test ids and disabled test ids from a render tree. */
 function renderVisible(tree) {
   const texts = []
   const testIds = []
+  const disabledIds = []
   const visit = (node) => {
     if (node === null || node === undefined || node === true || node === false) return
     if (typeof node === 'string' || typeof node === 'number') {
@@ -141,7 +143,10 @@ function renderVisible(tree) {
       return
     }
     if (typeof node.type === 'string') {
-      if (typeof props['data-testid'] === 'string') testIds.push(props['data-testid'])
+      if (typeof props['data-testid'] === 'string') {
+        testIds.push(props['data-testid'])
+        if (props.disabled === true) disabledIds.push(props['data-testid'])
+      }
       for (const key of ['title', 'aria-label', 'placeholder', 'alt']) {
         if (typeof props[key] === 'string' && props[key] !== '') texts.push(props[key])
       }
@@ -149,7 +154,7 @@ function renderVisible(tree) {
     }
   }
   visit(tree)
-  return { texts, testIds }
+  return { texts, testIds, disabledIds }
 }
 
 /** A slots double that runs each injection callback like the shell does. */
@@ -251,18 +256,97 @@ test('apply() is inert when the composition serves no slots seat', () => {
 
 // ------------------------------------------------------------------ i18n
 
-test('detectLocale follows document lang, then navigator, then English', () => {
+test('detectLocale prefers a saved choice, then a zh browser, then the page language', () => {
   const { plugin } = mountedClient()
   const detect = plugin._test.detectLocale
-  assert.equal(detect(undefined, undefined), 'en')
-  assert.equal(detect({ language: 'en-US' }, undefined), 'en')
-  assert.equal(detect({ language: 'zh-CN' }, undefined), 'zh')
-  assert.equal(detect({ languages: ['zh-Hans', 'en'] }, undefined), 'zh')
-  // The page language (set by the shell) wins over the browser preference.
-  assert.equal(detect({ language: 'en-US' }, { documentElement: { lang: 'zh-TW' } }), 'zh')
-  assert.equal(detect({ language: 'zh-CN' }, { documentElement: { lang: 'en-US' } }), 'en')
-  assert.equal(detect({ language: 'fr-FR' }, undefined), 'en')
-  assert.equal(detect({ languages: ['fr-FR', 'zh-CN'] }, undefined), 'en')
+  assert.equal(detect(undefined, undefined, undefined), 'en')
+  assert.equal(detect({ language: 'en-US' }, undefined, undefined), 'en')
+  assert.equal(detect({ language: 'zh-CN' }, undefined, undefined), 'zh')
+  assert.equal(detect({ languages: ['zh-Hans', 'en'] }, undefined, undefined), 'zh')
+  // Reported regression: a Chinese browser must win over an en page lang.
+  assert.equal(detect({ language: 'zh-CN' }, { documentElement: { lang: 'en-US' } }, undefined), 'zh')
+  // An English browser on a zh page still gets Chinese from the page lang.
+  assert.equal(detect({ language: 'en-US' }, { documentElement: { lang: 'zh-TW' } }, undefined), 'zh')
+  // The explicit in-UI preference outranks every environment signal.
+  assert.equal(detect({ language: 'zh-CN' }, { documentElement: { lang: 'zh-TW' } }, 'en'), 'en')
+  assert.equal(detect({ language: 'en-US' }, { documentElement: { lang: 'en-US' } }, 'zh'), 'zh')
+  // No signal -> English.
+  assert.equal(detect({ language: 'fr-FR' }, undefined, undefined), 'en')
+  assert.equal(detect({ languages: ['fr-FR', 'zh-CN'] }, undefined, undefined), 'zh')
+})
+
+test('a Chinese browser keeps the Chinese UI even when the page lang is English', () => {
+  const { plugin, byName } = mountedClient({
+    document: { documentElement: { lang: 'en-US' } },
+    navigator: { language: 'zh-CN', languages: ['zh-CN', 'en-US'] }
+  })
+  assert.equal(plugin._test.locale(), 'zh')
+  assert.equal(byName['conversation.input.left'].options.label(), '交接')
+  const workbench = renderSlot(byName, 'main', {})
+  assert.ok(workbench.texts.includes('交接工作台'))
+  assert.ok(workbench.testIds.includes('handoff-locale-toggle'))
+  assert.ok(workbench.testIds.includes('handoff-locale-zh'))
+  assert.ok(workbench.testIds.includes('handoff-locale-en'))
+})
+
+test('the in-UI switch changes the language immediately, persists, and survives a rebuild', () => {
+  const storage = fakeStorage()
+  const zhPage = mountedClient({
+    storage,
+    document: { documentElement: { lang: 'zh-CN' } },
+    navigator: { language: 'zh-CN' }
+  })
+  const localeKey = zhPage.plugin._test.localeKey
+  assert.equal(localeKey, 'dsh.handoff-kit.locale')
+  assert.equal(zhPage.plugin._test.locale(), 'zh')
+  const before = renderSlot(zhPage.byName, 'main', {})
+  assert.ok(before.texts.includes('交接工作台'))
+  assert.ok(before.testIds.includes('handoff-locale-toggle'))
+
+  // Switch to English through the exported helper (the component calls it).
+  zhPage.plugin._test.setLocale('en')
+  assert.equal(zhPage.plugin._test.locale(), 'en')
+  assert.equal(storage.getItem(localeKey), 'en')
+  const english = renderSlot(zhPage.byName, 'main', {})
+  assert.ok(english.texts.includes('Handoff Workbench'))
+  assert.ok(english.texts.includes('Host default (newest live session)'))
+  assert.ok(english.texts.includes('Refresh'))
+  assert.ok(english.texts.includes('Continue handoff'))
+  assert.equal(HAN_RE.test(english.texts.join(' ')), false)
+
+  // The same page can switch back without a reload.
+  zhPage.plugin._test.setLocale('zh')
+  assert.equal(zhPage.plugin._test.locale(), 'zh')
+  assert.equal(storage.getItem(localeKey), 'zh')
+  const backToChinese = renderSlot(zhPage.byName, 'main', {})
+  assert.ok(backToChinese.texts.includes('交接工作台'))
+  assert.ok(backToChinese.texts.includes('继续交接'))
+
+  // A rebuilt module (page reload) reads the saved explicit preference first.
+  zhPage.plugin._test.setLocale('en')
+  const rebuilt = mountedClient({
+    storage,
+    document: { documentElement: { lang: 'zh-CN' } },
+    navigator: { language: 'zh-CN' }
+  })
+  assert.equal(rebuilt.plugin._test.locale(), 'en')
+  const rebuiltRender = renderSlot(rebuilt.byName, 'main', {})
+  assert.ok(rebuiltRender.texts.includes('Handoff Workbench'))
+  assert.equal(HAN_RE.test(rebuiltRender.texts.join(' ')), false)
+})
+
+test('the floating panel exposes the language switch on both tabs', () => {
+  const { plugin, byName } = mountedClient(languageOptions('en-US'))
+  plugin._test.store.open = true
+  const createTab = renderSlot(byName, 'shell.overlay', {})
+  assert.ok(createTab.testIds.includes('handoff-locale-toggle'))
+  assert.ok(createTab.texts.includes('Create handoff package'))
+  plugin._test.setLocale('zh')
+  plugin._test.store.tab = 'load'
+  const loadTabZh = renderSlot(byName, 'shell.overlay', {})
+  assert.ok(loadTabZh.texts.includes('载入'))
+  assert.ok(loadTabZh.testIds.includes('handoff-locale-toggle'))
+  assert.ok(loadTabZh.testIds.includes('handoff-locale-en'))
 })
 
 test('English is the default when the environment exposes no language', () => {
@@ -561,4 +645,123 @@ test('the workbench selector names an implicit Host resolution and a stale pin',
       (text) => text.includes('session-gone') && text.includes('session-1') && text.includes('not live')
     )
   )
+})
+
+// -------------------------------------- project-key history fallback (P3)
+
+/** State shape the Host returns when the current project key has no batches. */
+function historyState() {
+  return {
+    project: { key: 'ws-newkey01', name: 'demo-app', workspace: '$WORKSPACE' },
+    session: { id: 'session-1', live: true, cwd: 'C:\\ws' },
+    batches: [
+      {
+        batchId: '20261022T023512Z-a1b2',
+        dir: '$DSH_HOME/handoff/old-key-11111111/20261022T023512Z-a1b2',
+        projectKey: 'old-key-11111111',
+        title: 'old one',
+        createdAt: '2026-10-22T02:35:12.000Z',
+        complete: true,
+        artifacts: 3,
+        bytes: 120
+      },
+      {
+        batchId: '20261022T023512Z-c3d4',
+        dir: '$DSH_HOME/handoff/other-key-22222222/20261022T023512Z-c3d4',
+        projectKey: 'other-key-22222222',
+        title: null,
+        createdAt: '2026-10-22T02:35:12.000Z',
+        complete: true,
+        artifacts: 2,
+        bytes: 80
+      }
+    ],
+    history: {
+      active: true,
+      currentProjectKey: 'ws-newkey01',
+      projectKeys: ['old-key-11111111', 'other-key-22222222'],
+      dir: '$DSH_HOME/handoff'
+    },
+    roots: { user: 'C:\\Users\\test\\.dsh\\handoff' },
+    warnings: [
+      {
+        code: 'PROJECT_KEY_FALLBACK',
+        detail: 'current project key ws-newkey01 has no batches; showing 2 historical batch(es)'
+      }
+    ]
+  }
+}
+
+test('groupBatchesByProject groups in list order and skips malformed rows', () => {
+  const { plugin } = mountedClient()
+  const group = plugin._test.groupBatchesByProject
+  assert.deepEqual(plain(group([])), [])
+  assert.deepEqual(
+    plain(
+      group([
+        { batchId: 'b1', projectKey: 'k1' },
+        { batchId: 'b2', projectKey: 'k2' },
+        null,
+        { batchId: 'b3', projectKey: 'k1' },
+        { batchId: 'b4' }
+      ])
+    ),
+    [
+      { projectKey: 'k1', batches: [{ batchId: 'b1', projectKey: 'k1' }, { batchId: 'b3', projectKey: 'k1' }] },
+      { projectKey: 'k2', batches: [{ batchId: 'b2', projectKey: 'k2' }] },
+      { projectKey: '', batches: [{ batchId: 'b4' }] }
+    ]
+  )
+})
+
+test('the workbench groups historical batches and warns it is read-only', () => {
+  const { plugin, byName } = mountedClient()
+  plugin._test.store.state = historyState()
+  const rendered = renderSlot(byName, 'main', {})
+  assert.ok(rendered.testIds.includes('handoff-history-notice'))
+  assert.ok(rendered.testIds.filter((id) => id === 'handoff-history-group').length >= 2)
+  assert.ok(rendered.texts.includes('Historical project (read-only)'))
+  assert.ok(
+    rendered.texts.some(
+      (text) =>
+        text.includes('Current project ws-newkey01 has no batches') &&
+        text.includes('old-key-11111111') &&
+        text.includes('other-key-22222222') &&
+        text.includes('read-only')
+    )
+  )
+  // Project keys are the group headers.
+  assert.ok(rendered.texts.includes('old-key-11111111'))
+  assert.ok(rendered.texts.includes('other-key-22222222'))
+  // The continue/append write path is refused while historical batches are shown.
+  assert.ok(rendered.disabledIds.includes('handoff-continue'))
+  assert.ok(rendered.texts.includes(EN_HISTORY_CONTINUE_DISABLED))
+  assert.equal(HAN_RE.test(rendered.texts.join(' ')), false)
+})
+
+test('the historical-batch warning renders in Chinese too', () => {
+  const { plugin, byName } = mountedClient(languageOptions('zh-CN'))
+  plugin._test.store.state = historyState()
+  const rendered = renderSlot(byName, 'main', {})
+  assert.ok(rendered.texts.includes('历史项目（只读）'))
+  assert.ok(
+    rendered.texts.some(
+      (text) => text.includes('当前项目 ws-newkey01 没有批次') && text.includes('只读显示')
+    )
+  )
+  assert.ok(rendered.disabledIds.includes('handoff-continue'))
+  assert.ok(rendered.texts.some((text) => text.includes('查看历史批次时无法继续交接')))
+})
+
+test('the Load tab shows the same historical grouping and banner', () => {
+  const { plugin, byName } = mountedClient()
+  plugin._test.store.state = historyState()
+  plugin._test.store.open = true
+  plugin._test.store.tab = 'load'
+  const rendered = renderSlot(byName, 'shell.overlay', {})
+  assert.ok(rendered.testIds.includes('handoff-history-notice'))
+  assert.ok(rendered.testIds.includes('handoff-history-group'))
+  assert.ok(rendered.texts.includes('Historical project (read-only)'))
+  assert.ok(rendered.texts.includes('20261022T023512Z-a1b2'))
+  assert.ok(rendered.texts.includes('20261022T023512Z-c3d4'))
 })
