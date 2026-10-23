@@ -133,3 +133,16 @@ profile `package.json` 手工修复前的备份：`package.json.bak-handoff-rehe
    `继续交接` 在 history 模式禁用（写操作仍只写当前 key）；C 已落地——`spec/HANDOFF.md` §2/§5、
    `spec/verify.md` §5.3、README/USAGE 补充项目 key 变化与 `PROJECT_KEY_FALLBACK` 说明。
    验证：301 测试全绿（+11 新 fallback 测试）、`docs:check` 0 error；UI 人工验收待刷新后确认。
+
+## 4. 批次删除（M5b 计划，2026-10-23 用户决定）
+
+**背景**：P2 起已知缺口「无删除 API/UI」；用户 2026-10-23 明确需要删除批次功能。
+**决议**：
+1. **软删除为主**：批次目录移入 `$DSH_HOME/handoff/.trash/<projectKey>/<batchId>-<时间戳>/`，
+   UI/工具二次确认后从列表消失；文件系统可恢复；「历史不原地改写」语义不变（仅移出读取路径）。
+2. **CLI 额外 `--hard`**：永久删除，不可恢复，需显式标志 + 确认输出。
+3. **血缘保护**：若批次被其它批次 `lineage.previous`（append/update 链）引用，默认拒绝删除并
+   提示先删除更新的后代；显式 `--force` 才允许，且输出强警告（会令后代 `LINEAGE_BROKEN`）。
+4. 删除是显式写操作：只由 UI 按钮/CLI/工具动作触发；`verify`/`load`/`list` 仍只读。
+5. 实现排期：M5（签名/策略）完成后立即做（M5b），1.0 前验收；测试覆盖软删可恢复、硬删、
+   血缘拒绝、删除后其它批次校验不受影响。

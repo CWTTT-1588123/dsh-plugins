@@ -246,6 +246,7 @@ handoff-kit verify-signature <batchDir> [--pubkey <path|keyId>]
 | **M3 跨工具适配**（✅ 已完成 2026-10-23） | 零依赖 CLI `verify/load/list/migrate` + 英文帮助；非 DSH 环境真实文件系统 E2E；真实批次只读复验演练（CLI 直接读用户级交接包，trust=verified） | `src/cli.js` + `bin/handoff-kit.mjs` + `test/cli.test.js` | 退出码 0、3、1、2 与 spec 一致；`npm test` 全绿（M3 提交 `ce3cb8d`） |
 | **M4 发布与公开门面**（**已完成 2026-10-23**：门面/CI/UI/rc.1 发布/安装演练 + 浏览器验收通过；rc.1 后语言/回退修复已随 **rc.2 发布**；安装工具链缺陷见 GAPS §3） | `package.json` 发布元数据定稿；`npm pack --dry-run` 核对；**T6 门面**（英文 README/`LICENSE`/Issue 模板/隐私安全声明/CI/英文 UI+locale/P2-G1 选择器）；`1.0.0-rc.N` 发布到 `next`（**首次用户手动**）；bundle 通过 npm spec 安装/卸载/回滚演练；插件市场可选 | npm rc 包 + 公开仓库 + 安装/回滚记录 | 用户逐次授权；安装回执；CI 全绿 |
 | **M5 可信度外层** | 签名 opt-in + 策略配置 + 审计回执；负例测试（坏签名/篡改/坏策略 fail-closed） | 签名/策略实现 + 测试 | 负例全绿；默认路径零依赖不变 |
+| **M5b 批次删除**（M5 后立即做；用户 2026-10-23 决定） | 软删除移入 `$DSH_HOME/handoff/.trash/<projectKey>/<batchId>-<时间戳>/`（可恢复）；CLI 额外 `--hard` 永久删除（强确认）；被其它批次 `lineage` 引用时默认拒绝删除（先删后代或显式 `--force` 并警告）；UI 删除按钮 + 二次确认；工具增加删除动作；测试（软删可恢复/硬删/血缘拒绝/删除不影响只读校验） | 删除实现 + 测试 + UI | 现有批次校验不变；删除仅显式操作；历史不原地改写 |
 | **M6 1.0 门槛验收** | 第三方代理独立安装使用 + 迁移演练 + 回滚 + 全量回归 + `docs:check` 0 error；P3 验收记录、CHANGELOG `1.0.0`、P3 文档冻结、ROADMAP 状态更新；隐私/平台声明复核 | `1.0.0`（latest）+ `docs/handoff-kit/acceptance/P3.md`（M6 产出，届时再建链） | ROADMAP P3 门槛 + §6.3 DoD + 用户确认 |
 
 顺序理由：规范（M1）先于适配器（M3）与发布（M4）；迁移器（M2）依赖规范；门面与 CI 在 M4 与首发合并；签名/策略（M5）依赖规范；1.0 最后统一验收。
@@ -342,6 +343,7 @@ M0 评审/基线 → M1 规范 → M2 迁移器 → M3 跨工具适配 → M4 �
 - 2026-10-23 09:0x：**rc.1 后修复完成（提交 `91a4fae`，待 rc.2 发布）**——①中文界面回归：语言探测改为「显式偏好 > 浏览器 zh* > 页面 lang > 英文」，新增工作台/浮层面板 **中文/English** 切换（即时生效、`localStorage: dsh.handoff-kit.locale`）；②projectKey 变化：显式 `batchId` 的 `load`/`verify` 跨兄弟 project key **只读**回退（`PROJECT_KEY_FALLBACK` 结果级警告，不降级 trust；回退只匹配同 workspace slug 的历史 key，避免混入无关项目，提交 `2430f1b`），工作台 0 批次时按 key 分组显示历史批次（只读横幅、禁用继续交接），写操作仍只写当前 key；spec/HANDOFF §2/§5、spec/verify §5.3、README/USAGE 已同步。测试 283→301 全绿、`docs:check` 0 error；后续小修为 303 测试。
 - 2026-10-23 09:10：**M4 浏览器验收通过（用户确认，截图证据）**——重启后插件从本地 link 加载（工具/技能正常、版本 `1.0.0-rc.1`）：①界面中文（探测顺序修复生效，中文/English 切换可见）；②「载入」显示「历史项目（只读）」横幅 + `dsh-plugins-cb7aa4e5` 的 8 个旧批次（分组/只读徽章，`stand-*` 无关项目已被 slug 过滤排除）；③打开旧批次 `20261022T140057Z-b49e` 显示 `trust=stale` 与 9 条漂移警告（`GIT_HEAD_CHANGED` 589c3f6→ccaf0e2、`SOURCE_FILE_CHANGED` 等，属正确漂移）；④Host 侧 `handoff_pack verify` 对该显式 batchId 走跨 key 只读回退并返回 `PROJECT_KEY_FALLBACK` 结果级警告。测试 303 全绿、`docs:check` 0 error/0 stale。**M4 收口；rc.2 版本已提交（`dd91f73`），待用户 `npm publish --tag next`；随后 M5 签名/审计/脱敏策略。**
 - 2026-10-23 09:15：**1.0.0-rc.2 发布完成**——`npm publish --tag next` 成功（registry dist-tags：`next=1.0.0-rc.2`，`latest` 保持 `1.0.0-rc.1`）；发布包 33 文件；`npx dsh-handoff-kit@1.0.0-rc.2 --version`=1.0.0-rc.2 且真实批次 `verify` exit 0 / trust=verified；git tag `v1.0.0-rc.2` 已推送（指向 `c879af6`，含文档同步，代码即 `dd91f73`）。**M5 开始：签名 opt-in/审计回执/脱敏策略（D7/D8）。**
+- 2026-10-23 09:32：**新增 M5b 批次删除（用户决定）**——软删除（回收站可恢复）为主，CLI 额外 `--hard` 永久删除；被其它批次 `lineage` 引用的批次默认拒绝删除（先删后代或显式 `--force` 并警告）；UI 删除按钮 + 二次确认；工具增加删除动作。M5 完成后立即实现，1.0 前验收。
 
 **文档治理落点（评审通过后，需另行批准的改动）**：
 
