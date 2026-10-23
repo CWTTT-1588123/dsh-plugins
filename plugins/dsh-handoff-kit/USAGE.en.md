@@ -1,6 +1,6 @@
 # dsh-handoff-kit — usage: the standard handoff flow
 
-<!-- docs-meta: status=current; phase=P3; verified=91a4fae@2026-10-23; tracks=-; supersedes=-; superseded-by=- -->
+<!-- docs-meta: status=current; phase=P3; verified=2430f1b@2026-10-23; tracks=-; supersedes=-; superseded-by=- -->
 
 > English counterpart of [`USAGE.md`](USAGE.md) (which is the Chinese original).
 > Applies to plugin `>= 0.3.1`; the UI entry is the 「交接」 button at the left of the
@@ -72,7 +72,8 @@
   **中文 / English** toggle in the workbench header or floating panel; the choice is remembered
   locally (`dsh.handoff-kit.locale`).
 - Adding or changing the git remote changes the project key. Older batches then appear read-only
-  under a "historical project" group, and an explicit `batchId` load falls back read-only to the
-  unique historical key with a `PROJECT_KEY_FALLBACK` warning. Writes always use the current key.
+  under a "historical project" group **with the same workspace slug** (unrelated projects are
+  ignored), and an explicit `batchId` load falls back read-only to the unique same-slug historical
+  key with a `PROJECT_KEY_FALLBACK` warning. Writes always use the current key.
 - Chinese original and governance docs: [`USAGE.md`](USAGE.md),
   [`spec/verify.md`](spec/verify.md), repository `docs/`.

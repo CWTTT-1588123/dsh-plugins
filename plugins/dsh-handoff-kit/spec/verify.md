@@ -1,6 +1,6 @@
 # Handoff Package Verification Specification
 
-<!-- docs-meta: status=current; phase=P3; verified=91a4fae@2026-10-23; tracks=-; supersedes=-; superseded-by=- -->
+<!-- docs-meta: status=current; phase=P3; verified=2430f1b@2026-10-23; tracks=-; supersedes=-; superseded-by=- -->
 
 > Status: **1.0 draft (P3/M1, 2026-10-23)** — normative for reference verifiers; frozen at 1.0.
 > Companion to [`HANDOFF.md`](HANDOFF.md) (package format). Implemented by `dsh-handoff-kit` (`handoff_pack action=verify`, `handoff_load`).
@@ -163,7 +163,7 @@ result (for example a tool result's `warnings` array), are **not** part of
 
 | Code | Meaning |
 |---|---|
-| `PROJECT_KEY_FALLBACK` | An explicit `batchId` was absent under the current project key and was uniquely located **read-only** under a sibling historical project key (for example after the git remote was added or changed). The batch is verified normally; no file is modified and `trust` is unchanged. Zero or multiple sibling hits keep the original `BATCH_NOT_FOUND` error. |
+| `PROJECT_KEY_FALLBACK` | An explicit `batchId` was absent under the current project key and was uniquely located **read-only** under a historical project key **with the same workspace slug** (for example after the git remote was added or changed). Unrelated projects that share the handoff root are never considered. The batch is verified normally; no file is modified and `trust` is unchanged. Zero or multiple same-slug hits keep the original `BATCH_NOT_FOUND` error. |
 
 ## 6. Determinism and stability
 

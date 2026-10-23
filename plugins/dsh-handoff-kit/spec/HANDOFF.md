@@ -1,6 +1,6 @@
 # Handoff Package Specification (HANDOFF.md + manifest.json + evidence)
 
-<!-- docs-meta: status=current; phase=P3; verified=91a4fae@2026-10-23; tracks=-; supersedes=-; superseded-by=- -->
+<!-- docs-meta: status=current; phase=P3; verified=2430f1b@2026-10-23; tracks=-; supersedes=-; superseded-by=- -->
 
 > Status: **1.0 draft (P3/M1, 2026-10-23)** — normative for generated batches; frozen at 1.0.
 > Implemented by `dsh-handoff-kit` (plugin version 0.3.1 at spec start). Machine-readable companion: [`../schema/manifest.v1.json`](../schema/manifest.v1.json), [`../schema/manifest.v2.json`](../schema/manifest.v2.json); verification algorithm: [`verify.md`](verify.md).
@@ -24,7 +24,7 @@ The generator never invents facts. Values the caller did not provide are rendere
 | Term | Meaning |
 |---|---|
 | **workspace** | Root directory of the project the package describes. |
-| **project key** | Stable id: `<slug(basename(workspace))>-<sha256(seed)[:8]>`; seed is the git remote URL when present, else the canonical workspace path. **Adding, removing or changing the git remote changes this key**; batches written under a previous key remain readable via explicit `batchId` (read-only sibling-key lookup, §5.3 in [`verify.md`](verify.md)) or the CLI's explicit path. |
+| **project key** | Stable id: `<slug(basename(workspace))>-<sha256(seed)[:8]>`; seed is the git remote URL when present, else the canonical workspace path. **Adding, removing or changing the git remote changes this key**; batches written under a previous key remain readable via explicit `batchId` (read-only fallback to a historical key with the same workspace slug, §5.3 in [`verify.md`](verify.md)) or the CLI's explicit path. Unrelated projects that share the handoff root are never mixed in. |
 | **batch id** | `YYYYMMDDTHHmmssZ-xxxx` (UTC timestamp + 4 lower-case hex). Fixed width, so lexical order equals time order. |
 | **batch** | One directory `$DSH_HOME/handoff/<project-key>/<batch-id>/` (default) or `<workspace>/.dsh/handoff/<project-key>/<batch-id>/` (`target=workspace`). |
 | **artifact** | Any file inside the batch that appears in `manifest.artifacts` and in `SHA256SUMS` (HANDOFF.md, evidence files, optional copies, SHA256SUMS). `manifest.json` is **not** an artifact. |

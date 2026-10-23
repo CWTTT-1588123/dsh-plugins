@@ -1,6 +1,6 @@
 # dsh-handoff-kit
 
-<!-- docs-meta: status=current; phase=P2; verified=91a4fae@2026-10-23; tracks=plugins/dsh-handoff-kit/src,plugins/dsh-handoff-kit/client.js,plugins/dsh-handoff-kit/index.js,plugins/dsh-handoff-kit/package.json; supersedes=-; superseded-by=- -->
+<!-- docs-meta: status=current; phase=P2; verified=2430f1b@2026-10-23; tracks=plugins/dsh-handoff-kit/src,plugins/dsh-handoff-kit/client.js,plugins/dsh-handoff-kit/index.js,plugins/dsh-handoff-kit/package.json; supersedes=-; superseded-by=- -->
 
 Deterministic **session handoff packages** for DeepSeek Harness: one tool call writes
 `HANDOFF.md` + `manifest.json` + evidence, and a later session can **verify the hashes**
@@ -49,9 +49,10 @@ fallbacks are surfaced instead of silently choosing a root session (P2-G1).
 
 **Project identity changes.** The project key prefers the git remote URL, so adding or changing a
 remote changes the key. When the current key has no batches, the workbench lists batches from
-sibling historical project keys in a read-only group with a banner, and an explicit
-`batchId` load/verify falls back read-only to a unique sibling key with a `PROJECT_KEY_FALLBACK`
-warning. Writes always use the current key; history is never rewritten.
+historical project keys **with the same workspace slug** in a read-only group with a banner, and an
+explicit `batchId` load/verify falls back read-only to a unique same-slug key with a
+`PROJECT_KEY_FALLBACK` warning. Unrelated projects on the same handoff root are never mixed in.
+Writes always use the current key; history is never rewritten.
 
 Data flow: the Client half calls this bundle's Host half through one authenticated same-origin
 JSON route, `POST /api/handoff-kit/rpc` (registered on `ctx.connection.fetch`). The route only

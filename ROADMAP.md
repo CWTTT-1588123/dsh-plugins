@@ -1,6 +1,6 @@
 # dsh-plugins ROADMAP
 
-<!-- docs-meta: status=current; phase=cross; verified=91a4fae@2026-10-23; tracks=-; supersedes=-; superseded-by=- -->
+<!-- docs-meta: status=current; phase=cross; verified=2430f1b@2026-10-23; tracks=-; supersedes=-; superseded-by=- -->
 
 > 本文件是插件仓库**阶段与状态的唯一权威**。规划、进度、验收均以这里为准；
 > 每阶段的设计与验收见 `docs/<插件>/{design,acceptance}/`。
@@ -118,7 +118,7 @@ UI 点击写入，复制开场提示词 trust=verified；旧批次漂移显示 s
 > **M4 门面/UI 完成（2026-10-23，提交 `62adf57`/`9781ce5`）**：GitHub 公开仓库 + 英文根 README/`LICENSE`/YAML Issue 模板/CI（Windows 必跑，Linux/macOS 实验性非阻塞）；英文 `USAGE.en.md`；英文优先 i18n（client 内嵌 142 keys + `locale/*.json`，跟随页面/浏览器语言，中文保留）与 P2-G1 工作台项目/会话选择器；版本 `1.0.0-rc.1`；283 测试全绿、`docs:check` 0 error、CI 绿；**rc.1 已发布**（npm tag `next`/`latest`）+ tag `v1.0.0-rc.1`。
 > **安装演练发现（2026-10-23）**：npm 包体安装成功，但实时激活需重启 DSH；且 `plugin_manager remove_bundle` 会清空 `link:` 目标目录（本地插件 64 文件被删，已 git 恢复并验证）。详见 [GAPS](docs/handoff-kit/GAPS.md) §3；后续安装演练必须备份 + 重启。
 > **验收补充（2026-10-23）**：添加 GitHub remote 使 `projectKey` 由 workspace seed 变为 remote seed，旧批次默认入口不可见（CLI 显式路径可用）；1.0 前补「显式 batchId 跨 project key 只读回退 + 迁移说明」，见 GAPS §3.4。
-> **rc.1 后修复（2026-10-23，提交 `91a4fae`；待 rc.2 发布）**：①中文界面回归——探测顺序改为「显式偏好 > 浏览器 zh* > 页面 lang > 英文」+ 工作台/浮层中文/English 切换（持久化）；②projectKey 变化——显式 batchId 跨兄弟 key 只读回退（`PROJECT_KEY_FALLBACK` 结果级警告、不降级 trust），工作台历史项目分组/只读横幅/禁用继续交接，写操作仍只落当前 key；301 测试全绿、`docs:check` 0 error、spec/README/USAGE 同步。
+> **rc.1 后修复（2026-10-23，提交 `91a4fae`/`2430f1b`；待 rc.2 发布）**：①中文界面回归——探测顺序改为「显式偏好 > 浏览器 zh* > 页面 lang > 英文」+ 工作台/浮层中文/English 切换（持久化）；②projectKey 变化——显式 batchId 跨兄弟 key 只读回退（`PROJECT_KEY_FALLBACK` 结果级警告、不降级 trust；**仅同 workspace slug**），工作台历史项目分组/只读横幅/禁用继续交接，写操作仍只落当前 key；303 测试全绿、`docs:check` 0 error、spec/README/USAGE 同步。
 
 - `manifest@2` / `HANDOFF.md` 规范公开 + schema 迁移器；
 - 跨工具适配器（其他 agent / CLI 消费同一交接包）；
