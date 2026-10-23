@@ -71,10 +71,20 @@ boundary: verify read-only first (第 0 步: `handoff_load batchId=<id>`), repor
 starting the next phase**. Non-`verified` verdicts must be reported and stop the session rather
 than be self-repaired. The UI generation/copy flow renders this prompt unchanged.
 
-Known P2 limitations (full list in `docs/handoff-kit/GAPS.md`): the workbench is root-scoped, so
-without a session hint the Host falls back to the newest live root session (click 「交接」 once to
-pin the current session); lineage is shown inside H0/create results rather than a separate list
-column; no delete/archive UI; Chinese-only copy.
+**Re-grounding (P3/M5).** A handoff narrative can be stale even when every hash matches (the
+package is a snapshot; the repository keeps moving). The rendered prompt therefore adds two
+read-only steps before reporting: the new session must (2) actually open the key files listed in
+H4 / `manifest.files` (role priority `entry`/`source`/`test`/`doc`, at most 8, plus referenced
+documents/config) instead of only re-hashing them, and (3) cross-check the HANDOFF narrative
+against the **current** code and files — including whether every repo-relative path it references
+still exists — then report the checked files and any “narrative vs reality” mismatch. Writes are
+still forbidden until the user explicitly instructs them.
+
+Known P2/P3 limitations (full list in `docs/handoff-kit/GAPS.md`): the workbench is root-scoped,
+so without a session hint the Host falls back to the newest live root session (the project/session
+selector can pin one); lineage is shown inside H0/create results rather than a separate list
+column; historical project-key batches are read-only in the list (delete still soft-moves them);
+`--hard` deletion exists only in the CLI.
 
 ## CLI (P3/M3)
 
@@ -82,18 +92,24 @@ The package also ships a **zero-dependency CLI** (`bin/handoff-kit.mjs`, binary 
 that runs **outside** DeepSeek Harness — for other agents, scripts and CI, no DSH install needed:
 
 ```text
-handoff-kit verify  <batchDir> [--workspace <dir>] [--json]
-handoff-kit load    <batchDir> [--workspace <dir>] [--sections|--full] [--json]
+handoff-kit verify  <batchDir> [--workspace <dir>] [--pubkey <pem>] [--json]
+handoff-kit load    <batchDir> [--workspace <dir>] [--pubkey <pem>] [--sections|--full] [--json]
 handoff-kit list    --root <handoffRoot> [--json]
 handoff-kit migrate <batchDir> --out <newBatchDir> [--workspace <dir>] [--json]
+handoff-kit sign    <batchDir> --key <privateKey.pem> [--force] [--json]
+handoff-kit delete  <batchDir> [--hard] [--force] [--json]
 ```
 
 - no network, no subprocess, Node >= 20; reuses the same manifest/verification/redaction modules
   as the plugin (no second implementation of the format);
-- exit codes: `0` verified/ok, `3` stale, `1` invalid, `2` usage/IO error (frozen in
+- exit codes: `0` verified/ok, `3` stale, `1` invalid/refused, `2` usage/IO error (frozen in
   [`spec/verify.md`](spec/verify.md) §4);
-- `--workspace <dir>` enables git/source drift checks; without it the verifier states that drift
-  was not checked instead of assuming it clean;
+- `--workspace <dir>` enables git/source/path-reference drift checks; without it the verifier
+  states that drift was not checked instead of assuming it clean;
+- `--pubkey <pem>` is the explicit signature trust source (fallback: `$DSH_HOME/handoff/trusted-keys.json`);
+- `sign` writes an opt-in detached Ed25519 `signature.json` (private key read only from `--key`);
+- `delete` is the destructive command: soft delete to `.trash` by default, `--hard` removes
+  permanently, `--force` overrides lineage protection;
 - `migrate --out` must point at a new/empty directory whose basename is a batch id
   (`YYYYMMDDTHHmmssZ-xxxx`); the source batch is never modified.
 
@@ -106,12 +122,16 @@ $DSH_HOME/handoff/<project-key>/<batch-id>/
 ├── HANDOFF.md          # H0–H9 narrative, every claim tagged with its evidence class
 ├── SHA256SUMS          # hashes of HANDOFF.md + evidence/*
 ├── manifest.json       # written last; its presence = batch complete
+├── signature.json      # optional opt-in detached Ed25519 signature (not an artifact)
 └── evidence/
     ├── git.json        # parsed .git HEAD / refs / reflog / remote (no git status, no subprocess)
     ├── files.json      # scanned files with role, size and sha256
     ├── session.json    # this session's tool/call metadata only (never message bodies)
-    └── redactions.json # secret redaction counts
+    └── redactions.json # secret redaction counts (+ optional policy provenance)
 ```
+
+Deleted (soft) batches move to `$DSH_HOME/handoff/.trash/<project-key>/<batch-id>-<timestamp>/`;
+the recycle bin is never scanned as a project.
 
 `target=workspace` explicitly downgrades to `<workspace>/.dsh/handoff/…` (git-ignored in
 the developing repository). There is **no silent fallback**: permission refusals return a
@@ -139,6 +159,49 @@ filesystem service exposes no mtime. Evidence is therefore: parsed `.git` state
 session's `tool/call` metadata (paths / commands / counts, redacted and truncated;
 message bodies are never mined). `HANDOFF.md` marks every assertion with
 `[文件哈希]` / `[git]` / `[会话]` / `[输入]` / `[待验]`.
+
+## Trust layer: signing, policy, receipt (P3/M5)
+
+**Signing is opt-in and off by default.** The CLI can write a detached Ed25519 `signature.json`
+that signs the bytes of `SHA256SUMS` (it is not itself an artifact, so unsigned batches stay
+byte-identical and fully valid):
+
+```text
+handoff-kit sign <batchDir> --key <privateKey.pem> [--force]
+handoff-kit verify <batchDir> --pubkey <publicKey.pem>
+```
+
+`verify`/`load` report a result-level `signature.status`: `unsigned` (no file), `untrusted` (valid
+but the key is not trusted), `valid` (trusted), or `invalid` (→ `SIGNATURE_INVALID` error,
+`trust=invalid`). Only `invalid` changes trust. Trust sources: `--pubkey` →
+`$DSH_HOME/handoff/trusted-keys.json` (`{keys:[{keyId?, publicKey, name?}]}`) → none. Private keys
+are never written into a batch, the profile, or a session.
+
+**Optional redaction policy** — `$DSH_HOME/handoff/policy.json` can only **add** denylist
+entries and redaction rules; the built-in rules are a safety floor that cannot be disabled.
+Malformed policies are **fail-closed** (`HANDOFF_POLICY_INVALID`, nothing is written) and the
+policy digest is recorded in `evidence/redactions.json` as `policy:{sha256, source}`.
+
+**Audit receipt** — `verify`/`load` return a read-only `receipt`
+(`checker`, `checkedAt`, `manifestSha256`/`sumsSha256`/`handoffSha256`); nothing is persisted.
+
+**Path-reference check** — `HANDOFF_PATH_MISSING` warns when a repo-relative path referenced in
+the narrative no longer exists (generation-time warning; verification warning with a workspace).
+
+## Deleting batches (P3/M5b)
+
+```text
+handoff_pack action=delete batchId=<id> [force=true]   # tool / UI: soft delete only
+/handoff delete <id>                                    # command shortcut
+handoff-kit delete <batchDir> [--hard] [--force]        # CLI: soft by default
+```
+
+- default **soft delete** moves the batch to `<handoffRoot>/.trash/<project-key>/<batchId>-<timestamp>/`
+  (restorable from the filesystem); the workbench asks for confirmation and never sends `--hard`;
+- `--hard` permanently removes the directory (CLI only, explicit);
+- a batch referenced by another batch's `lineage` is refused (`HANDOFF_BATCH_REFERENCED`);
+  `--force` allows it but can surface `LINEAGE_BROKEN` in descendants;
+- deletions are explicit writes; `verify`/`load`/`list` remain read-only.
 
 ## Continuous handoffs (P1/M2)
 
@@ -198,8 +261,13 @@ handoff_load verifyFirst=false              # skip checks; trust can only be sta
 - `trust`: `verified` (hashes + source files + git HEAD all consistent) / `stale` (warnings or
   drift found) / `invalid` (verification errors — do not trust);
 - `verification.findings` + `drift` (same checks as `handoff_pack verify`);
+- result-level `signature` (if a `signature.json` exists) and `receipt` (read-only audit receipt);
 - pointers to `HANDOFF.md`, `manifest.json`, `SHA256SUMS`, `evidence/session.json`, and
   optionally bounded excerpts (`include=sections|full` — summary is the default to save context).
+
+A consuming agent should then follow the prompt's **re-grounding** steps — read the key files the
+package references and compare the narrative against the current code — before reporting and
+waiting for an explicit instruction.
 
 Human shortcut: `/handoff resume [<batchId>]` prints the same verdict in Chinese.
 
@@ -211,8 +279,10 @@ handoff_pack verify batchId=20261022T023512Z-a1b2
 ```
 
 `verify` recomputes artifact hashes, checks `SHA256SUMS`, re-hashes the source files the
-manifest recorded, compares the current git HEAD, and scans the package for secret residue.
-It is read-only and stable: two runs on an unchanged package differ only in `checkedAt`.
+manifest recorded, compares the current git HEAD, checks repo-relative paths referenced by the
+narrative (`HANDOFF_PATH_MISSING`), verifies an optional signature (`SIGNATURE_INVALID`), and
+scans the package for secret residue. It is read-only and stable: two runs on an unchanged
+package differ only in `checkedAt` (and in the `receipt.checkedAt`).
 
 ## Uninstall
 
@@ -230,6 +300,6 @@ cd plugins/dsh-handoff-kit
 npm test        # node --test "test/**/*.test.js" (Node 24 does not expand a directory argument)
 ```
 
-Batch cleanup is manual because the harness filesystem has no delete primitive: move obsolete
-`$DSH_HOME/handoff/<project>/<batch>` directories out of the handoff root (the plugin never deletes
-history). `docs/handoff-kit/GAPS.md` is the single ledger for gaps and boundaries.
+Batch cleanup is explicit: use the tool/workbench/CLI **delete** (soft delete to the handoff
+root's `.trash`, recoverable) instead of moving directories by hand; `--hard` (CLI only) removes
+permanently. `docs/handoff-kit/GAPS.md` is the single ledger for gaps and boundaries.

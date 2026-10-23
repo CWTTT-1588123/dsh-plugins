@@ -1,6 +1,6 @@
 {
   "name": "dsh-handoff-kit",
-  "version": "1.0.0-rc.2",
+  "version": "1.0.0-rc.3",
   "description": "Deterministic session handoff packages (HANDOFF.md + manifest.json) for DeepSeek Harness",
   "type": "module",
   "main": "index.js",

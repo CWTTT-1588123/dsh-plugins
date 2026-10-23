@@ -37,6 +37,7 @@ export function createFakeFs(options = {}) {
   const root = resolve(options.root ?? 'C:\\ws')
   const entries = new Map()
   const writes = []
+  const mutations = []
   const caseInsensitive = platform === 'win32'
 
   const normalize = (path) => resolve(String(path))
@@ -264,9 +265,52 @@ export function createFakeFs(options = {}) {
       return { version: { token: `write-${writes.length}` }, before: current, after: next }
     },
 
+    /**
+     * Optional move capability (the real Host fs service exposes none today):
+     * the deletion adapter prefers it so unit tests exercise the same code path
+     * the plugin takes, while the real Host falls back to `node:fs`.
+     */
+    async rename(fromPath, toPath, signal) {
+      signal?.throwIfAborted?.()
+      const from = normalize(String(fromPath))
+      const to = normalize(String(toPath))
+      const source = getEntry(from)
+      if (source === undefined) throw fsError('FS_NOT_FOUND', `no such path "${from}"`)
+      if (getEntry(to) !== undefined) throw fsError('FS_EXISTS', `target already exists "${to}"`)
+      const prefix = key(from) + sep
+      const moves = []
+      for (const [entryKey, entry] of entries) {
+        if (entryKey === key(from) || entryKey.startsWith(prefix)) moves.push({ entryKey, entry })
+      }
+      for (const move of moves) entries.delete(move.entryKey)
+      for (const move of moves) {
+        const rest = move.entry.display.slice(from.length)
+        const nextDisplay = normalize(`${to}${rest}`)
+        store(nextDisplay, { ...move.entry, display: nextDisplay })
+      }
+      mutations.push({ op: 'rename', from, to })
+    },
+
+    /** Optional recursive remove capability used by the deletion adapter. */
+    async remove(path, signal) {
+      signal?.throwIfAborted?.()
+      const absolute = normalize(String(path))
+      if (getEntry(absolute) === undefined) throw fsError('FS_NOT_FOUND', `no such path "${absolute}"`)
+      const prefix = key(absolute) + sep
+      for (const entryKey of [...entries.keys()]) {
+        if (entryKey === key(absolute) || entryKey.startsWith(prefix)) entries.delete(entryKey)
+      }
+      mutations.push({ op: 'remove', path: absolute })
+    },
+
     // ── test-only surface ────────────────────────────────────────────────
     /** Every write performed so far, in order. */
     writes,
+    /** Deletion mutations (rename/remove), tracked separately from writes. */
+    mutations,
+    mutationOps() {
+      return mutations.map((mutation) => mutation.op)
+    },
     writePaths() {
       return writes.map((write) => write.path)
     },
@@ -302,7 +346,7 @@ export function createFakeFs(options = {}) {
     addSymlink(path, target) {
       seedSymlink(path, target)
     },
-    remove(path) {
+    drop(path) {
       const absolute = normalize(resolve(root, path))
       entries.delete(key(absolute))
     },

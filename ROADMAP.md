@@ -13,7 +13,7 @@
 | P0 | 0.1.x | 手动生成 + 校验闭环 | **done**（0.1.0，2026-10-22） | [P0 实施计划](docs/handoff-kit/design/P0_implementation_plan.md) | [P0 验收记录](docs/handoff-kit/acceptance/P0.md) |
 | P1 | 0.2.x | 真实改动证据 + 消费闭环 + 轻自动 | **done**（0.2.0，2026-10-22；0.2.1 挂账清理） | [P1 实施计划](docs/handoff-kit/design/P1_plan.md) | [P1 验收记录](docs/handoff-kit/acceptance/P1.md) |
 | P2 | 0.3.x | UI 工作台（对接提示词优先） | **done**（0.3.0，2026-10-22；0.3.1 提示词安全修复） | [P2 计划](docs/handoff-kit/design/P2_plan.md) | [P2 验收记录](docs/handoff-kit/acceptance/P2.md) |
-| P3 | 1.0 | 规范与分发 | **进行中**（M0–M4 完成，2026-10-23；**rc.2 已发布**（`next=1.0.0-rc.2`，tag `v1.0.0-rc.2`）；M5 签名/审计/脱敏策略进行中） | [P3 实施计划](docs/handoff-kit/design/P3_plan.md) | 进行中（M6 产出） |
+| P3 | 1.0 | 规范与分发 | **进行中**（M0–M5b 完成，2026-10-23；`1.0.0-rc.3` 待发布；下一步 M6 代理验收/迁移演练/1.0.0） | [P3 实施计划](docs/handoff-kit/design/P3_plan.md) | 进行中（M6 产出） |
 
 ## P0 — 可用（0.1.x）
 
@@ -120,6 +120,7 @@ UI 点击写入，复制开场提示词 trust=verified；旧批次漂移显示 s
 > **验收补充（2026-10-23）**：添加 GitHub remote 使 `projectKey` 由 workspace seed 变为 remote seed，旧批次默认入口不可见（CLI 显式路径可用）；1.0 前补「显式 batchId 跨 project key 只读回退 + 迁移说明」，见 GAPS §3.4。
 > **rc.1 后修复（2026-10-23，提交 `91a4fae`/`2430f1b`；待 rc.2 发布）**：①中文界面回归——探测顺序改为「显式偏好 > 浏览器 zh* > 页面 lang > 英文」+ 工作台/浮层中文/English 切换（持久化）；②projectKey 变化——显式 batchId 跨兄弟 key 只读回退（`PROJECT_KEY_FALLBACK` 结果级警告、不降级 trust；**仅同 workspace slug**），工作台历史项目分组/只读横幅/禁用继续交接，写操作仍只落当前 key；303 测试全绿、`docs:check` 0 error、spec/README/USAGE 同步。
 > **M4 验收通过（2026-10-23 09:10，用户浏览器确认）**：中文界面/语言切换生效；「历史项目（只读）」显示 `cb7aa4e5` 的 8 个旧批次（无关项目已过滤）；旧批次显示 `trust=stale` + 9 条正确漂移警告；Host 侧显式 batchId 回退返回 `PROJECT_KEY_FALLBACK`。**M4 收口**；rc.2 已发布（`next=1.0.0-rc.2`，tag `v1.0.0-rc.2`）→ **M5 签名/审计/脱敏策略进行中。**
+> **M5 + A 增强 + M5b 完成（2026-10-23，待 rc.3 发布）**：opt-in Ed25519 签名（`signature.json` + CLI `sign`/`--pubkey`/trusted-keys）、脱敏策略（只能追加/内置地板不可关/fail-closed）、审计回执；转接增强（提示词 re-grounding 实际读关键文件 + `HANDOFF_PATH_MISSING` 路径存在性）；批次删除（软删 `.trash` + CLI `--hard` + 血缘保护 + UI 删除按钮）。测试 303→362 全绿、`docs:check` 0 error、真实 CLI E2E 通过。**下一步统一提交 → rc.3 → M6。**
 
 - `manifest@2` / `HANDOFF.md` 规范公开 + schema 迁移器；
 - 跨工具适配器（其他 agent / CLI 消费同一交接包）；

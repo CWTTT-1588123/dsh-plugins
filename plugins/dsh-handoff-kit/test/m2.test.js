@@ -44,6 +44,9 @@ function changeSummary(overrides = {}) {
 function makeHarness({ mode = 'danger-full-access', services, summary } = {}) {
   const fs = createFixtureFs()
   addGitFixture(fs)
+  // The session trace touches `src/new.js`; give the fixture a real file so the
+  // rendered HANDOFF's path references are current (A2 checks them on verify).
+  fs.addFile('src/new.js', 'export const created = 1\n')
   const events = [
     { type: 'turn/start', seq: 1, data: { turn: 1 } },
     { type: 'tool/call', seq: 2, data: { turn: 1, name: 'read', arguments: JSON.stringify({ path: 'src/index.js' }) } },

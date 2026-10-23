@@ -189,7 +189,10 @@ test('H7 points at AGENTS.md when collected and states when it is missing', () =
   assert.ok(withAgents.includes('不擅自改代码'))
 
   const withoutAgents = renderHandoff(emptyManifest())
-  assert.ok(withoutAgents.includes('未发现 `$WORKSPACE/AGENTS.md`'))
+  // A2: an explicitly-absent collaboration entry must not look like a live path
+  // reference (`$WORKSPACE/AGENTS.md` would be reported as missing by verify).
+  assert.ok(withoutAgents.includes('未发现 AGENTS.md'))
+  assert.ok(!withoutAgents.includes('`$WORKSPACE/AGENTS.md`'))
 })
 
 test('H8 names the batch id, the reading order, both hash commands and the drift format', () => {

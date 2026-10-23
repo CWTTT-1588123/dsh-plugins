@@ -24,6 +24,10 @@ description: 生成、校验或消费当前工作区的确定性会话交接包�
    - `files`：关键文件的工作区相对路径（绝对路径/`..` 会被拒绝）；
    - `copyFiles=true`：把关键文件脱敏后复制进 `evidence/files/`（默认关闭）；
    - `includeDiffs=true`：附上有界 workspaceChanges diff（≤20 文件/单文件 64 KiB/总 512 KiB）。
+   - **认知要写足**（交接价值在此）：关键决策与理由、踩过的坑/失败方案、当前假设与不确定点、
+     下一步的入口文件与验证方式。新会话只会按你写下的内容继承认知，未写下的细节不会自动传递。
+   - 叙述里引用的仓库路径会被确定性检查：缺失时生成带 `HANDOFF_PATH_MISSING` 警告（不阻断），
+     校验时同样报 warn；引用前确认路径存在，不确定就标注 `[待验]`。
 3. 输出默认在用户级 `$DSH_HOME/handoff/<project-key>/<batch-id>/`；只有显式 `target=workspace` 才写 `<workspace>/.dsh/handoff/`。没有静默回退：权限不足会返回结构化错误和修法。
 4. **同一工作连续交接**（P1/M2）：
    - `handoff_pack action=append previousBatchId=<上一批>` → 新建批次并记录血缘（默认最新批次）；
@@ -60,16 +64,27 @@ P0 证据缺口（如实标注）：没有 `git status`（禁子进程）、没�
    - 需要正文时用 `include=sections`（H0–H9 摘要）或 `include=full`（截断全文）。
 2. 等价的人类命令：`/handoff resume [<batchId>]`（中文摘要）；只做哈希校验用 `handoff_pack action=verify`。
 3. 需要逐字正文时直接读 `HANDOFF.md`：按 H2（概念）→ H3（代码地图）→ H4（已验证事实）→ H8（首轮动作）顺序；
-4. 对 H4 抽查至少 3 条哈希：PowerShell `Get-FileHash <path> -Algorithm SHA256` 或 `sha256sum <path>`，与 manifest/HANDOFF 记录比对；
-5. 汇报漂移：断言 / 期望值 / 实际值 / 结论（可信 / 已漂移 / 待验）。
+4. **re-grounding（P3/M5 起内置在开场提示词）**：不要只核对哈希——实际打开 H4/文件清单里的关键文件
+   （role 优先 entry/source/test/doc，最多 8 个；包中引用的文档/配置也读），核对「叙述 vs 当前代码/
+   文件」，特别检查引用路径是否仍存在（`HANDOFF_PATH_MISSING`）以及“已实现/已完成”的描述是否属实；
+5. 对 H4 抽查至少 3 条哈希：PowerShell `Get-FileHash <path> -Algorithm SHA256` 或 `sha256sum <path>`，与 manifest/HANDOFF 记录比对；
+6. 汇报：trust、**我实际核对过的文件清单**、叙述与现状不符/引用失效清单、建议下一步；
+   仍然**只读、等用户明确指令后**才可修改文件。
 
 > Windows/PowerShell 读 `manifest.json` / `HANDOFF.md` 时请**显式 UTF-8**：
 > `[System.IO.File]::ReadAllText($path, [System.Text.Encoding]::UTF8)` 或 `Get-Content -Raw -Encoding utf8`。
 > 否则中文会被按 ANSI 解码、`ConvertFrom-Json` 解析失败（实测踩坑：同一批次纯读取出现乱码/解析错误，改用显式 UTF-8 后正常）。
 
-**跨工具消费（非 DSH）**：本包同时提供零依赖 CLI `handoff-kit`（`verify`/`load`/`list`/`migrate`，
+**跨工具消费（非 DSH）**：本包同时提供零依赖 CLI `handoff-kit`（`verify`/`load`/`list`/`migrate`/`sign`/`delete`，
 退出码 0/3/1/2，无网络/无子进程），供其他 agent、脚本与 CI 在**不装 DSH** 的情况下按同一规范消费
 交接包；契约见 `spec/verify.md` §4。本技能本身面向 DSH 内的模型路径，两者共享同一套格式实现。
+
+**信任层（可选）**：`handoff-kit sign <batchDir> --key <私钥.pem>` 生成 detached Ed25519
+`signature.json`（默认不签名）；verify/load 的结果级 `signature.status`（valid/untrusted/unsigned/
+invalid）与只读 `receipt` 见 `spec/HANDOFF.md` §8.2 / `spec/verify.md` §5.4。私钥不要放进仓库/批次。
+
+**删除（显式写操作）**：工具/命令/UI 默认软删除到 `<handoffRoot>/.trash`（可恢复）；CLI 可 `--hard`
+永久删除；被 lineage 引用的批次默认拒绝（`HANDOFF_BATCH_REFERENCED`），不要用删除掩盖问题。
 
 ## 边界
 

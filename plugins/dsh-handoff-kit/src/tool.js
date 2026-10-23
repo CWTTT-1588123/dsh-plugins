@@ -72,6 +72,15 @@ export function summarizeResult(value) {
           `(${value.verification?.counts?.errors ?? 0} errors, ${value.verification?.counts?.warnings ?? 0} warnings)`
       )
       break
+    case 'delete':
+      lines.push(
+        value.mode === 'hard'
+          ? `permanently deleted ${value.batchId ?? 'batch'} (hard delete, not recoverable)`
+          : `moved ${value.batchId ?? 'batch'} to the handoff recycle bin${
+              typeof value.trashDir === 'string' ? ` at ${value.trashDir}` : ''
+            } (recoverable from the filesystem)`
+      )
+      break
     case 'list':
       lines.push(`list: ${value.batches?.length ?? 0} batch(es)`)
       break
@@ -98,9 +107,9 @@ export function createTool(service) {
       }
     },
     timeoutMs: TOOL_TIMEOUT_MS,
-    // Reads may run together; batch-writing actions are exclusive.
+    // Reads may run together; batch-writing/deleting actions are exclusive.
     isConcurrencySafe(args) {
-      return !['create', 'append', 'update', 'migrate'].includes(args?.action)
+      return !['create', 'append', 'update', 'migrate', 'delete'].includes(args?.action)
     },
     async execute(rawArgs, exec) {
       const args = validateToolArgs(rawArgs)

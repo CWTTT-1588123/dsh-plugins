@@ -293,7 +293,7 @@ test('command resume handler calls service.load (not service.run)', async () => 
 test('load reports invalid with findings when manifest is missing', async () => {
   const harness = makeHarness()
   const created = await createBatch(harness)
-  harness.fs.remove(`${created.displayDir}\\manifest.json`)
+  harness.fs.drop(`${created.displayDir}\\manifest.json`)
   const result = await loadBatch(harness, { batchId: FIXED_BATCH_ID })
   assert.equal(result.trust, 'invalid')
   assert.equal(result.handoff.path.endsWith('/HANDOFF.md'), true)

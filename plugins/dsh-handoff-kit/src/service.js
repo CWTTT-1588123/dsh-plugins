@@ -32,6 +32,8 @@ import {
   LIMITS,
   LOAD_LIMITS,
   MANIFEST_FILE,
+  PLUGIN_NAME,
+  PLUGIN_VERSION,
   SCHEMA_VERSION,
   SCHEMA_VERSION_V2,
   SUMS_FILE,
@@ -74,6 +76,19 @@ import {
 import { buildFuel } from './fuel.js'
 import { isDeniedFile, redactDeep, redactText, scanSecrets } from './redact.js'
 import {
+  EMPTY_POLICY,
+  createPolicy,
+  isPolicyDenied,
+  policyProvenance,
+  readPolicyFile
+} from './policy.js'
+import {
+  SIGNATURE_FILE,
+  TRUSTED_KEYS_FILE,
+  evaluateSignature,
+  parseTrustedKeys
+} from './signature.js'
+import {
   artifactEntry,
   buildSha256Sums,
   createManifest,
@@ -85,6 +100,16 @@ import {
 } from './manifest.js'
 import { renderHandoff } from './render.js'
 import { assertBatchCreatable, orderEntries, writeBatch } from './write.js'
+import { findMissingPathRefs, missingPathRefWarnings } from './path-refs.js'
+import {
+  REFERENCED_FORCE_WARNING,
+  createDeleteBackend,
+  describeReferrers,
+  findLineageReferrers,
+  normalizeProjectKey,
+  trashTimestamp,
+  uniqueTrashDir
+} from './delete.js'
 
 /** Environment-level limitations every generated handoff states honestly. */
 export const ENV_WARNINGS = Object.freeze([
@@ -108,6 +133,9 @@ const RESULT_KEY_ORDER = [
   'displayDir',
   'project',
   'batchId',
+  'projectKey',
+  'mode',
+  'trashDir',
   'git',
   'artifacts',
   'totals',
@@ -119,6 +147,8 @@ const RESULT_KEY_ORDER = [
   'migration',
   'preview',
   'verification',
+  'signature',
+  'receipt',
   'batches',
   'next',
   'limits'
@@ -344,6 +374,29 @@ export function createService({
     }
   }
 
+  /** True when an fs error just means "path does not exist". */
+  function isNotFoundError(error) {
+    const code = error !== null && typeof error === 'object' ? error.code : undefined
+    return code === FS_NOT_FOUND || code === 'ENOENT'
+  }
+
+  /**
+   * Load the optional user-level redaction policy (P3/M5, D8).
+   *
+   * An absent file keeps the rc.2 behavior. A present but unreadable/invalid
+   * file throws `HANDOFF_POLICY_INVALID` before anything can be written, so the
+   * caller never produces a partially trusted batch.
+   */
+  async function resolvePolicy({ context, io }) {
+    const loaded = await readPolicyFile({ io, dshHome: context.dshHome })
+    if (loaded === null) return EMPTY_POLICY
+    return createPolicy({
+      sha256: loaded.sha256,
+      source: tokenizePath(loaded.absolutePath, context.contexts),
+      policy: loaded.policy
+    })
+  }
+
   async function resolveContext(exec) {
     const agent = exec?.agent
     const session =
@@ -398,7 +451,7 @@ export function createService({
     return { project, git, warnings: Array.isArray(gitResult?.warnings) ? gitResult.warnings : [] }
   }
 
-  async function resolveTrace(context) {
+  async function resolveTrace(context, redactionRules) {
     const events = typeof context.session?.ownEvents === 'function' ? context.session.ownEvents() : []
     const windowEvents = takeEventWindow(events, LIMITS.sessionMaxEvents, LIMITS.sessionMaxBytes)
     const trace = buildSessionTrace({
@@ -406,7 +459,8 @@ export function createService({
       events: windowEvents,
       totalEvents: events.length,
       contexts: context.contexts,
-      limits: LIMITS
+      limits: LIMITS,
+      redactionRules
     })
     const warnings = []
     if (context.session === null || context.session === undefined) {
@@ -424,10 +478,102 @@ export function createService({
     return { trace, warnings }
   }
 
-  async function scanWorkspace({ args, context, exec }) {
-    const io = ioFor(exec?.signal)
+  /** Read the read-only trusted-key list at `$DSH_HOME/handoff/trusted-keys.json`. */
+  async function loadTrustedKeys({ context, io }) {
+    const absolutePath = join(context.dshHome, HANDOFF_SUBDIR, TRUSTED_KEYS_FILE)
+    let info
+    try {
+      info = await io.lstat(absolutePath)
+    } catch (error) {
+      if (isNotFoundError(error)) return { keys: [] }
+      return { keys: [], detail: `trusted-keys.json could not be inspected: ${errorMessageOf(error)}` }
+    }
+    if (info === undefined || info === null) return { keys: [] }
+    if (info.type !== 'file')
+      return { keys: [], detail: 'trusted-keys.json is not a regular file' }
+    let text
+    try {
+      text = await io.readText(absolutePath)
+    } catch (error) {
+      return { keys: [], detail: `trusted-keys.json could not be read: ${errorMessageOf(error)}` }
+    }
+    try {
+      return { keys: parseTrustedKeys(text) }
+    } catch (error) {
+      return { keys: [], detail: `trusted-keys.json is invalid: ${errorMessageOf(error)}` }
+    }
+  }
+
+  /**
+   * Verify the optional detached signature of one batch (read-only).
+   *
+   * Returns `{status, keyId?, detail?}`. `invalid` is mapped by the caller to a
+   * `SIGNATURE_INVALID` error finding; `unsigned`/`untrusted` never change
+   * findings or trust.
+   */
+  async function evaluateBatchSignature({ context, io, batchDir }) {
+    const signaturePath = join(batchDir, SIGNATURE_FILE)
+    let info
+    try {
+      info = await io.lstat(signaturePath)
+    } catch (error) {
+      if (isNotFoundError(error)) return { status: 'unsigned' }
+      return { status: 'invalid', detail: `signature.json could not be inspected: ${errorMessageOf(error)}` }
+    }
+    if (info === undefined || info === null) return { status: 'unsigned' }
+    if (info.type !== 'file')
+      return { status: 'invalid', detail: 'signature.json is not a regular file' }
+    let signatureText
+    try {
+      signatureText = await io.readText(signaturePath)
+    } catch (error) {
+      return { status: 'invalid', detail: `signature.json could not be read: ${errorMessageOf(error)}` }
+    }
+    let sumsBytes
+    try {
+      sumsBytes = await io.readBytes(join(batchDir, SUMS_FILE), MAX_VERIFY_ARTIFACT_BYTES)
+    } catch {
+      sumsBytes = undefined
+    }
+    const trusted = await loadTrustedKeys({ context, io })
+    return evaluateSignature({
+      signatureText,
+      sumsBytes,
+      trustedKeys: trusted.keys,
+      ...(typeof trusted.detail === 'string' ? { trustedKeysError: trusted.detail } : {})
+    })
+  }
+
+  /**
+   * Build the read-only audit receipt (D8): checker identity/version, the check
+   * instant and sha256 hashes of manifest.json / SHA256SUMS / HANDOFF.md. A
+   * missing or unreadable input is `null` (never invented).
+   */
+  async function buildReceipt({ io, batchDir, checkedAt }) {
+    const inputs = { manifestSha256: null, sumsSha256: null, handoffSha256: null }
+    for (const [file, key] of [
+      [MANIFEST_FILE, 'manifestSha256'],
+      [SUMS_FILE, 'sumsSha256'],
+      [HANDOFF_FILE, 'handoffSha256']
+    ]) {
+      try {
+        const bytes = await io.readBytes(join(batchDir, file), MAX_VERIFY_ARTIFACT_BYTES)
+        inputs[key] = sha256Hex(bytes)
+      } catch {
+        inputs[key] = null
+      }
+    }
+    return {
+      checker: { name: PLUGIN_NAME, version: PLUGIN_VERSION },
+      checkedAt,
+      inputs
+    }
+  }
+
+  async function scanWorkspace({ args, context, exec, policy, io: injectedIo }) {
+    const io = injectedIo ?? ioFor(exec?.signal)
     const projectInfo = await resolveProject(context, io)
-    const traceInfo = await resolveTrace(context)
+    const traceInfo = await resolveTrace(context, policy.rules)
     const collect = await collectWorkspace({
       workspaceRoot: context.workspaceRoot,
       workspaceCanonical: context.workspaceCanonical,
@@ -435,6 +581,7 @@ export function createService({
       explicitFiles: args.files,
       io,
       limits: LIMITS,
+      denied: policy.denied,
       trace: traceInfo.trace
     })
     const warnings = mergeWarnings([
@@ -575,7 +722,7 @@ export function createService({
   }
 
   /** Read optional goal/jobs fuel; every failure degrades to available:false. */
-  async function collectFuel({ context, exec }) {
+  async function collectFuel({ context, exec, redactionRules }) {
     const agent = exec?.agent
     const goalsService = typeof ctx.get === 'function' ? ctx.get('goals') : undefined
     let goal
@@ -611,7 +758,8 @@ export function createService({
       sessionId: context.session?.id,
       limits: LIMITS,
       goalNote,
-      jobsNote
+      jobsNote,
+      redactionRules
     })
   }
 
@@ -733,13 +881,21 @@ export function createService({
     }
   }
 
-  async function prepareCopies({ args, context, io, files, ledger }) {
+  async function prepareCopies({
+    args,
+    context,
+    io,
+    files,
+    ledger,
+    denied = isDeniedFile,
+    redactionRules = []
+  }) {
     const entries = []
     const warnings = []
     let readBytes = 0
     if (args.copyFiles !== true) return { entries, warnings, readBytes }
     const candidates = (files ?? [])
-      .filter((file) => typeof file?.path === 'string' && !isDeniedFile(file.path))
+      .filter((file) => typeof file?.path === 'string' && !isPolicyDenied(denied, file.path))
       .filter((file) => file.sha256 !== undefined && file.skippedReason === undefined)
       .slice(0, LIMITS.copyMaxFiles)
     for (const candidate of candidates) {
@@ -749,7 +905,8 @@ export function createService({
           io,
           workspaceRoot: context.workspaceRoot,
           relPath: candidate.path,
-          limits: LIMITS
+          limits: LIMITS,
+          denied
         })
       } catch (error) {
         warnings.push({
@@ -765,7 +922,7 @@ export function createService({
         })
         continue
       }
-      const redacted = redactText(result.content)
+      const redacted = redactText(result.content, redactionRules)
       ledger.add(`${EVIDENCE_FILES_DIR}/${candidate.path}`, redacted.hits)
       readBytes += Buffer.byteLength(result.content, 'utf8')
       entries.push({
@@ -776,7 +933,11 @@ export function createService({
     return { entries, warnings, readBytes }
   }
 
-  function buildEvidenceTexts(manifest) {
+  function buildEvidenceTexts(manifest, policyMeta) {
+    const provenance = {
+      sha256: typeof policyMeta?.sha256 === 'string' ? policyMeta.sha256 : null,
+      source: typeof policyMeta?.source === 'string' ? policyMeta.source : null
+    }
     return [
       {
         path: `${EVIDENCE_DIR}/git.json`,
@@ -792,14 +953,18 @@ export function createService({
       },
       {
         path: `${EVIDENCE_DIR}/redactions.json`,
-        content: jsonText({ schemaVersion: SCHEMA_VERSION, redactions: manifest.redactions })
+        content: jsonText({
+          schemaVersion: SCHEMA_VERSION,
+          redactions: manifest.redactions,
+          policy: provenance
+        })
       }
     ]
   }
 
-  function guardFinalSecrets(texts) {
+  function guardFinalSecrets(texts, redactionRules) {
     for (const [file, text] of texts) {
-      const residue = scanSecrets(String(text ?? ''))
+      const residue = scanSecrets(String(text ?? ''), redactionRules)
       if (residue.length > 0) {
         const summary = residue.map((hit) => `${hit.kind} x${hit.count}`).join(', ')
         throw handoffError(
@@ -812,8 +977,18 @@ export function createService({
 
   async function runScan(args, exec) {
     const context = await resolveContext(exec)
-    const { io, projectInfo, traceInfo, collect, warnings } = await scanWorkspace({ args, context, exec })
-    void io
+    const io = ioFor(exec?.signal)
+    // The policy is read even though scan never writes: an invalid configuration
+    // must be surfaced (fail-closed) instead of previewing a batch that create
+    // would later refuse.
+    const policy = await resolvePolicy({ context, io })
+    const { projectInfo, traceInfo, collect, warnings } = await scanWorkspace({
+      args,
+      context,
+      exec,
+      policy,
+      io
+    })
     const createdAt = now().toISOString()
     const batchId = makeBatchId({ date: new Date(createdAt), suffix: randomSuffix() })
     const root = handoffRootFor(args.target, context)
@@ -868,17 +1043,29 @@ export function createService({
   async function runCreate(args, exec) {
     const context = await resolveContext(exec)
     const root = assertCreateAllowed(args, context)
-    const { io, projectInfo, traceInfo, collect, warnings } = await scanWorkspace({ args, context, exec })
+    const io = ioFor(exec?.signal)
+    // Fail-closed before any write: an unreadable/invalid policy aborts without
+    // creating a batch directory or a single artifact file.
+    const policy = await resolvePolicy({ context, io })
+    const { projectInfo, traceInfo, collect, warnings } = await scanWorkspace({
+      args,
+      context,
+      exec,
+      policy,
+      io
+    })
     const ledger = createRedactionLedger()
     const copy = await prepareCopies({
       args,
       context,
       io,
       files: collect.files ?? [],
-      ledger
+      ledger,
+      denied: policy.denied,
+      redactionRules: policy.rules
     })
     const changes = await collectChanges({ context, exec, includeDiffs: args.includeDiffs === true })
-    const fuel = await collectFuel({ context, exec })
+    const fuel = await collectFuel({ context, exec, redactionRules: policy.rules })
     const fuelWarnings = []
     if (changes.available !== true) {
       fuelWarnings.push({ code: 'CHANGES_UNAVAILABLE', detail: String(changes.note ?? 'workspaceChanges unavailable') })
@@ -891,14 +1078,20 @@ export function createService({
     if (fuel.jobs.available !== true) {
       fuelWarnings.push({ code: 'JOBS_UNAVAILABLE', detail: String(fuel.jobs.note ?? 'jobs unavailable') })
     }
-    const allWarnings = mergeWarnings([...warnings, ...copy.warnings, ...fuelWarnings])
+    const baseWarnings = mergeWarnings([...warnings, ...copy.warnings, ...fuelWarnings])
+    // A2: narrative paths that no longer exist become generation warnings. The
+    // check runs on the rendered HANDOFF and re-renders once when it adds a
+    // warning (the warning itself is part of H6, so the rendered text must
+    // include it). Generation is never blocked by a stale reference.
+    const pathRefWarnings = []
 
     // Redact every independently sourced string before it can reach an artifact.
-    const redactedInputs = redactDeep(inputsRecord(args))
+    const redactedInputs = redactDeep(inputsRecord(args), policy.rules)
     ledger.add(HANDOFF_FILE, redactedInputs.hits)
-    const redactedGit = redactDeep(projectInfo.git)
+    const redactedGit = redactDeep(projectInfo.git, policy.rules)
     ledger.add(`${EVIDENCE_DIR}/git.json`, redactedGit.hits)
     ledger.add(`${EVIDENCE_DIR}/session.json`, traceInfo.trace.redactionHits ?? [])
+    const policyMeta = policyProvenance(policy)
 
     const createdAt = now().toISOString()
     const batchId = makeBatchId({ date: new Date(createdAt), suffix: randomSuffix() })
@@ -917,8 +1110,56 @@ export function createService({
     let manifest = null
     let handoffText = ''
     let evidenceTexts = []
-    for (let pass = 0; pass < 3; pass += 1) {
+    for (let pass = 0; pass < 4; pass += 1) {
       const before = ledger.count()
+      const warningsForManifest = mergeWarnings([...baseWarnings, ...pathRefWarnings])
+      manifest = createManifest({
+        batchId,
+        createdAt,
+        target: args.target,
+        schemaVersion: SCHEMA_VERSION_V2,
+        generator: generatorIdentity({ dshVersion, platform }),
+        project: projectInfo.project,
+        session: sessionRecord(context),
+        sandbox: sandboxRecord(context),
+        inputs: redactedInputs.value,
+        git: redactedGit.value,
+        files: collect.files ?? [],
+        sessionTrace: traceInfo.trace,
+        redactions: ledger.list(),
+        warnings: warningsForManifest,
+        limits: publicLimits(),
+        scan: scanRecord(collect),
+        changes,
+        fuel,
+        ...(lineage !== undefined ? { lineage } : {})
+      })
+      const handoff = redactText(renderHandoff(manifest), policy.rules)
+      ledger.add(HANDOFF_FILE, handoff.hits)
+      handoffText = handoff.text
+      evidenceTexts = buildEvidenceTexts(manifest, policyMeta).map((entry) => {
+        const redacted = redactText(entry.content, policy.rules)
+        ledger.add(entry.path, redacted.hits)
+        return { path: entry.path, content: redacted.text }
+      })
+      const pathRefCheck = await findMissingPathRefs({
+        text: handoffText,
+        workspaceRoot: context.workspaceRoot,
+        dshHome: context.dshHome,
+        io
+      })
+      const known = new Set(pathRefWarnings.map((warning) => warning.detail))
+      const added = missingPathRefWarnings(pathRefCheck.missing).filter(
+        (warning) => !known.has(warning.detail)
+      )
+      pathRefWarnings.push(...added)
+      if (ledger.count() === before && added.length === 0) break
+    }
+    const allWarnings = mergeWarnings([...baseWarnings, ...pathRefWarnings])
+    // Safety net: the path-reference warning list is discovered while rendering,
+    // so if the pass bound was hit exactly when a warning was added, rebuild the
+    // rendered artifacts once so manifest.warnings and HANDOFF agree.
+    if (JSON.stringify(manifest.warnings) !== JSON.stringify(allWarnings)) {
       manifest = createManifest({
         batchId,
         createdAt,
@@ -940,15 +1181,14 @@ export function createService({
         fuel,
         ...(lineage !== undefined ? { lineage } : {})
       })
-      const handoff = redactText(renderHandoff(manifest))
+      const handoff = redactText(renderHandoff(manifest), policy.rules)
       ledger.add(HANDOFF_FILE, handoff.hits)
       handoffText = handoff.text
-      evidenceTexts = buildEvidenceTexts(manifest).map((entry) => {
-        const redacted = redactText(entry.content)
+      evidenceTexts = buildEvidenceTexts(manifest, policyMeta).map((entry) => {
+        const redacted = redactText(entry.content, policy.rules)
         ledger.add(entry.path, redacted.hits)
         return { path: entry.path, content: redacted.text }
       })
-      if (ledger.count() === before) break
     }
 
     const covered = orderEntries([
@@ -966,13 +1206,16 @@ export function createService({
       { path: SUMS_FILE, content: sumsText },
       { path: MANIFEST_FILE, content: manifestText }
     ])
-    guardFinalSecrets([
-      [HANDOFF_FILE, handoffText],
-      ...evidenceTexts.map((entry) => [entry.path, entry.content]),
-      ...copy.entries.map((entry) => [entry.path, entry.content]),
-      [SUMS_FILE, sumsText],
-      [MANIFEST_FILE, manifestText]
-    ])
+    guardFinalSecrets(
+      [
+        [HANDOFF_FILE, handoffText],
+        ...evidenceTexts.map((entry) => [entry.path, entry.content]),
+        ...copy.entries.map((entry) => [entry.path, entry.content]),
+        [SUMS_FILE, sumsText],
+        [MANIFEST_FILE, manifestText]
+      ],
+      policy.rules
+    )
     await writeBatch({
       fs: ctx.fs,
       policy: context.policy,
@@ -1530,6 +1773,33 @@ export function createService({
     return drift
   }
 
+  /** A2: narrative path references that no longer exist are `warn` findings. */
+  async function checkHandoffPathRefs({ context, io, batchDir, findings }) {
+    let text
+    try {
+      const info = await io.lstat(join(batchDir, HANDOFF_FILE))
+      if (info === undefined || info === null || info.type !== 'file') return
+      text = await io.readText(join(batchDir, HANDOFF_FILE))
+    } catch {
+      return
+    }
+    const checked = await findMissingPathRefs({
+      text,
+      workspaceRoot: context.workspaceRoot,
+      dshHome: context.dshHome,
+      io
+    })
+    if (!checked.supported) return
+    for (const entry of checked.missing) {
+      findings.push({
+        severity: 'warn',
+        code: 'HANDOFF_PATH_MISSING',
+        path: entry.ref,
+        detail: `HANDOFF references a path that no longer exists: ${entry.ref}`
+      })
+    }
+  }
+
   async function runVerify(args, exec) {
     const context = await resolveContext(exec)
     const io = ioFor(exec?.signal)
@@ -1574,10 +1844,23 @@ export function createService({
       await checkLineage({ manifest, located, io, findings })
       drift = await checkDrift({ manifest, context, io, findings, artifactsChecked })
     }
+    await checkHandoffPathRefs({ context, io, batchDir: located.dir, findings })
+    // P3/M5/D7: an invalid detached signature is an integrity error; unsigned and
+    // untrusted packages are informational and never change findings or trust.
+    const signature = await evaluateBatchSignature({ context, io, batchDir: located.dir })
+    if (signature.status === 'invalid') {
+      findings.push({
+        severity: 'error',
+        code: 'SIGNATURE_INVALID',
+        path: SIGNATURE_FILE,
+        detail: signature.detail ?? 'signature.json does not verify against SHA256SUMS'
+      })
+    }
     const sorted = sortFindings(findings)
     const errors = sorted.filter((finding) => finding.severity === 'error').length
     const warnings = sorted.filter((finding) => finding.severity === 'warn').length
     const checkedAt = now().toISOString()
+    const receipt = await buildReceipt({ io, batchDir: located.dir, checkedAt })
     const dirToken = tokenizePath(located.dir, context.contexts)
     const fallbackWarnings =
       located.fallback === undefined
@@ -1617,10 +1900,135 @@ export function createService({
       }),
       warnings: fallbackWarnings,
       verification,
+      signature,
+      receipt,
       next:
         errors === 0
           ? [`read ${dirToken}/HANDOFF.md`, 're-hash a few H4 assertions before trusting them']
           : ['review verification.findings (errors first)', 'regenerate with handoff_pack action=create force=true if the package is stale'],
+      limits: publicLimits()
+    })
+  }
+
+  /**
+   * Locate the batch a delete targets. A UI-supplied `projectKey` is an
+   * internal locator for a historical (moved-key) batch: it is shape-checked by
+   * `normalizeProjectKey`, must exist as a direct child of the handoff root, and
+   * is then used verbatim. Without it, deletion follows the same current-key +
+   * unique same-slug fallback as verify/load.
+   */
+  async function locateBatchForDelete({ args, root, currentKey, io }) {
+    const requestedKey = normalizeProjectKey(args.projectKey)
+    if (requestedKey !== undefined) {
+      const projectDir = join(root, requestedKey)
+      let info
+      try {
+        info = await io.lstat(projectDir)
+      } catch {
+        info = undefined
+      }
+      if (info === undefined || info === null || info.type !== 'directory')
+        throw handoffError(ERROR.BATCH_NOT_FOUND, `project key directory not found under ${root}: ${requestedKey}`)
+      const dir = join(projectDir, args.batchId)
+      let batchInfo
+      try {
+        batchInfo = await io.lstat(dir)
+      } catch {
+        batchInfo = undefined
+      }
+      if (batchInfo === undefined || batchInfo === null || batchInfo.type !== 'directory')
+        throw handoffError(ERROR.BATCH_NOT_FOUND, `batch ${args.batchId} not found under ${projectDir}`)
+      return { batchId: args.batchId, dir, projectDir, projectKey: requestedKey }
+    }
+    const located = await locateBatch({
+      args: { batchId: args.batchId },
+      root,
+      projectKeyName: currentKey,
+      io,
+      allowProjectFallback: true
+    })
+    return { ...located, projectKey: basename(located.projectDir) }
+  }
+
+  /**
+   * Delete one batch (P3/M5b): the tool/UI path is SOFT DELETE only.
+   *
+   * The batch directory moves to `<root>/.trash/<projectKey>/<batchId>-<ts>`,
+   * so list/verify/load no longer see it while the files stay recoverable.
+   * A batch referenced by another batch's lineage is refused unless `force` is
+   * set (then a strong warning is recorded). Hard deletion exists only in the
+   * reference CLI.
+   */
+  async function runDelete(args, exec) {
+    const context = await resolveContext(exec)
+    // Same write fence as create: read-only sessions and target=user without
+    // danger-full-access are refused before anything moves.
+    const root = assertCreateAllowed(args, context)
+    const io = ioFor(exec?.signal)
+    const projectInfo = await resolveProject(context, io)
+    const located = await locateBatchForDelete({
+      args,
+      root,
+      currentKey: projectInfo.project.key,
+      io
+    })
+
+    const warnings = []
+    const referrers = await findLineageReferrers({
+      io,
+      root,
+      projectKey: located.projectKey,
+      batchId: located.batchId
+    })
+    if (referrers.length > 0) {
+      if (args.force !== true) {
+        throw handoffError(
+          ERROR.BATCH_REFERENCED,
+          `batch ${located.batchId} is referenced by other batches (${describeReferrers(referrers)}); ` +
+            'delete the newer batch(es) first or pass force=true'
+        )
+      }
+      warnings.push({
+        code: REFERENCED_FORCE_WARNING,
+        detail:
+          `deleted batch ${located.batchId} is still referenced by ${describeReferrers(referrers)}; ` +
+          'those batches will now report a LINEAGE_BROKEN finding'
+      })
+    }
+
+    const timestamp = trashTimestamp(now())
+    const { trashDir } = await uniqueTrashDir({
+      root,
+      projectKey: located.projectKey,
+      batchId: located.batchId,
+      timestamp,
+      io
+    })
+    const backend = createDeleteBackend({ fs: ctx.fs })
+    await backend.move(located.dir, trashDir)
+
+    const dirToken = tokenizePath(located.dir, context.contexts)
+    const trashToken = tokenizePath(trashDir, context.contexts)
+    const project = {
+      key: located.projectKey,
+      name: projectInfo.project.name,
+      workspace: projectInfo.project.workspace
+    }
+    return finish({
+      action: 'delete',
+      dir: dirToken,
+      displayDir: await displayOf(located.dir),
+      project,
+      batchId: located.batchId,
+      projectKey: located.projectKey,
+      mode: 'trash',
+      trashDir: trashToken,
+      warnings: mergeWarnings(warnings),
+      totals: totalsOf({ warnings: warnings.length }),
+      next: [
+        `batch ${located.batchId} was moved to the recycle bin: ${trashToken}`,
+        'restore it by moving the directory back under its project key; run handoff_pack action=list to refresh'
+      ],
       limits: publicLimits()
     })
   }
@@ -1771,6 +2179,8 @@ export function createService({
       'displayDir',
       'trust',
       'verification',
+      'signature',
+      'receipt',
       'handoff',
       'manifest',
       'pointers',
@@ -1819,17 +2229,26 @@ export function createService({
       )
     }
     let verification
+    let signature
+    let receipt
     if (args.verifyFirst !== false) {
       const verifyResult = await runVerify(
         { action: 'verify', batchId: located.batchId, target: args.target },
         exec
       )
       verification = verifyResult.verification
+      signature = verifyResult.signature
+      receipt = verifyResult.receipt
     } else {
       warnings.push({
         code: 'VERIFY_SKIPPED',
         detail: 'verifyFirst=false: hashes and drift were not checked, so trust cannot exceed stale'
       })
+      // The signature and the audit receipt stay read-only observations, so they
+      // are still reported even when full hash verification was skipped.
+      const checkedAt = now().toISOString()
+      signature = await evaluateBatchSignature({ context, io, batchDir: located.dir })
+      receipt = await buildReceipt({ io, batchDir: located.dir, checkedAt })
     }
 
     let manifest = null
@@ -1919,6 +2338,8 @@ export function createService({
       displayDir,
       trust,
       ...(verification !== undefined ? { verification } : {}),
+      signature,
+      receipt,
       handoff,
       manifest: manifestSummary,
       pointers,
@@ -1951,6 +2372,8 @@ export function createService({
         return runVerify(args, exec)
       case 'migrate':
         return runMigrate(args, exec)
+      case 'delete':
+        return runDelete(args, exec)
       case 'list':
         return runList(args, exec)
       default:

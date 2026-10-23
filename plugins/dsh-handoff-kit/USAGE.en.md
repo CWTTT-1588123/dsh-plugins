@@ -38,8 +38,12 @@
 1. Step 0 of the prompt: run `handoff_load batchId=<id>` and check the `trust` verdict.
 2. Read `HANDOFF.md` in the order H2 → H3 → H4 → H8.
 3. Re-hash at least 3 H4 assertions (or the CLI: `handoff-kit verify <batchDir>`).
-4. Report to the user: trust, re-check results, and suggested next steps. **Wait for an
-   explicit instruction before modifying any file.**
+4. **Re-ground:** actually open the key files/documents the package references (role priority
+   `entry`/`source`/`test`/`doc`, at most 8) and compare the narrative with the current code —
+   including whether every referenced repo-relative path still exists
+   (`HANDOFF_PATH_MISSING`).
+5. Report to the user: trust, the files actually checked, any narrative-vs-reality mismatch, and
+   suggested next steps. **Wait for an explicit instruction before modifying any file.**
 
 ### Step 4 (new session): start only after the user says so
 
@@ -59,7 +63,25 @@
 | Load a legacy v1 batch as v2 | `handoff_pack action=migrate batchId=<v1-batch>` |
 | CLI (outside DSH) | `handoff-kit verify <batchDir> [--workspace <dir>] [--json]` |
 
-## 3. Notes
+## 3. Advanced (optional)
+
+- **Signing (off by default):** `handoff-kit sign <batchDir> --key <privateKey.pem>` writes
+  `signature.json`; verify with `--pubkey <publicKey.pem>`. `signature.status` is
+  `valid`/`untrusted`/`unsigned`/`invalid`; only `invalid` (`SIGNATURE_INVALID`) changes trust.
+  Never commit a private key.
+- **Redaction policy:** `$DSH_HOME/handoff/policy.json` can only **add** denylist/redaction
+  rules; built-ins cannot be disabled; malformed policy is fail-closed
+  (`HANDOFF_POLICY_INVALID`, nothing written); its digest is recorded in
+  `evidence/redactions.json.policy`.
+- **Deleting batches:** tool/UI `delete` (soft delete to `.trash`, restorable); CLI
+  `handoff-kit delete <batchDir> [--hard] [--force]`; a lineage-referenced batch is refused
+  unless forced (which can later show `LINEAGE_BROKEN` in descendants).
+- **Audit receipt:** `verify`/`load` return a read-only `receipt` (checker/checkedAt/input
+  hashes); nothing is persisted.
+- **Path references:** a repo-relative path referenced by HANDOFF.md that no longer exists gives
+  `HANDOFF_PATH_MISSING` (generation warning; verification warn → `trust=stale`, never invalid).
+
+## 4. Notes
 
 - Handoff packages may contain tokenized workspace paths, file names/digests, session
   metadata, and redacted command snippets; they never contain message bodies, and

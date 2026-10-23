@@ -639,7 +639,7 @@ function renderH7(manifest) {
     lines.push('- 协作入口：`$WORKSPACE/AGENTS.md`（本次采集已发现，先读它再动代码）。')
   } else {
     lines.push(
-      '- 协作入口：本次采集范围内未发现 `$WORKSPACE/AGENTS.md`；请先向用户确认协作规范，不要自行假定。'
+      '- 协作入口：本次采集范围内未发现 AGENTS.md；请先向用户确认协作规范，不要自行假定。'
     )
   }
   lines.push('- 先问后答：需求或约束不明确时先提问，不臆测、不扩大改动范围。')

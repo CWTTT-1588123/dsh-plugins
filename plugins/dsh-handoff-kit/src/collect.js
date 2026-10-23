@@ -262,11 +262,19 @@ async function inspectRegularFile({ io, workspaceRoot, relPath }) {
  * non-regular path is `HANDOFF_INVALID_ARGS`.
  *
  * @param {{io: object, workspaceRoot: string, explicitFiles: unknown[],
- *   limits: typeof LIMITS, excluded: string[]}} input
+ *   limits: typeof LIMITS, excluded: string[],
+ *   denied?: (relativePath: string) => boolean|string}} input
  * @returns {Promise<string[]>} validated, deduplicated, sorted relative POSIX paths.
  * @throws {Error & {code: string}}
  */
-async function validateExplicitFiles({ io, workspaceRoot, explicitFiles, limits, excluded }) {
+async function validateExplicitFiles({
+  io,
+  workspaceRoot,
+  explicitFiles,
+  limits,
+  excluded,
+  denied = isDeniedFile
+}) {
   if (explicitFiles.length > limits.maxExplicitFiles)
     throw handoffError(
       ERROR.INVALID_ARGS,
@@ -277,11 +285,11 @@ async function validateExplicitFiles({ io, workspaceRoot, explicitFiles, limits,
   for (const [index, raw] of explicitFiles.entries()) {
     const relativePath = validateRelativePath(raw, `files[${index}]`)
     if (seen.has(relativePath)) continue
-    const denied = deniedReasonFor(relativePath, isDeniedFile)
-    if (denied !== null)
+    const denyReason = deniedReasonFor(relativePath, denied)
+    if (denyReason !== null)
       throw handoffError(
         ERROR.PATH_ESCAPE,
-        `files[${index}] "${relativePath}" is denied by the handoff denylist (${denied})`
+        `files[${index}] "${relativePath}" is denied by the handoff denylist (${denyReason})`
       )
     if (isExcluded(relativePath, excluded))
       throw handoffError(
@@ -439,6 +447,7 @@ export async function readCopyCandidate(input = {}) {
  *     listDir(absPath: string): Promise<Array<{name: string, type: string, size?: number}>>
  *   },
  *   limits?: Record<string, number>,
+ *   denied?: (relativePath: string) => boolean|string,
  *   trace?: {touchedFiles?: Array<{path: string}>}|null
  * }} input
  * @returns {Promise<{
@@ -461,7 +470,8 @@ export async function collectWorkspace(input = {}) {
     explicitFiles = [],
     io,
     limits,
-    trace
+    trace,
+    denied = isDeniedFile
   } = input ?? {}
   if (typeof workspaceRoot !== 'string' || workspaceRoot === '')
     throw handoffError(ERROR.INTERNAL, 'collectWorkspace needs an absolute workspaceRoot')
@@ -475,6 +485,8 @@ export async function collectWorkspace(input = {}) {
     throw handoffError(ERROR.INTERNAL, 'collectWorkspace needs a filesystem io adapter')
   if (!Array.isArray(explicitFiles))
     throw handoffError(ERROR.INVALID_ARGS, 'files must be an array of strings')
+  if (typeof denied !== 'function')
+    throw handoffError(ERROR.INTERNAL, 'collectWorkspace denied must be a predicate function')
   const merged = mergeLimits(limits)
   const excluded = excludedWorkspacePrefixes({ workspaceRoot, workspaceCanonical, dshHome })
 
@@ -494,7 +506,8 @@ export async function collectWorkspace(input = {}) {
     workspaceRoot,
     explicitFiles,
     limits: merged,
-    excluded
+    excluded,
+    denied
   })
 
   // ── BFS walk ──────────────────────────────────────────────────────────────
@@ -555,7 +568,7 @@ export async function collectWorkspace(input = {}) {
         })
       }
 
-      if (deniedReasonFor(relativePath, isDeniedFile) !== null) {
+      if (deniedReasonFor(relativePath, denied) !== null) {
         state.denied += 1
         continue
       }
@@ -615,7 +628,7 @@ export async function collectWorkspace(input = {}) {
       continue
     }
     if (candidateSet.has(relativePath)) continue
-    if (deniedReasonFor(relativePath, isDeniedFile) !== null) continue
+    if (deniedReasonFor(relativePath, denied) !== null) continue
     if (isExcluded(relativePath, excluded)) continue
     const inspected = await inspectRegularFile({ io, workspaceRoot, relPath: relativePath })
     if (inspected.status === 'file') candidateSet.add(relativePath)

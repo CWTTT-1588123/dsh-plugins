@@ -24,7 +24,8 @@
 2. 把第 1 步复制到的**整段开场提示词**粘贴发送，**不要再补**"别写文件""先只读"之类的保险句——
    提示词本身已内置强制边界与只读验证步骤。
 3. 预期表现：新会话先 `handoff_load` 复核 → `trust=verified` → 按 H2 → H3 → H4 → H8 只读阅读
-   → 汇报 trust / 覆盖缺口 / 建议的下一步 → **停下来等你的明确指令**。
+   → **实际打开包里的关键文件/文档、核对「叙述 vs 当前代码」**（re-grounding）→ 汇报 trust /
+   核对过的文件 / 不符清单 / 建议的下一步 → **停下来等你的明确指令**。
 
 ### 第 3 步（旁证复核，推荐，约 10 秒）
 
@@ -34,6 +35,9 @@
 - 交接包哈希仍 `verified`（artifacts / 源文件 / gitHead 一致）；
 - 批次数与生成时一致，没有新增批次或新文件。
 
+> 新会话的汇报里应包含：**我实际核对过的文件清单**、**叙述与现状不符/引用已失效的清单**
+> （对应 `HANDOFF_PATH_MISSING` 等 finding）。发现不符只报告，不自行修复。
+
 > 单人使用可替代：让新会话贴出 `git --no-optional-locks status --porcelain` 的输出。
 > 目的：不轻信"我没写文件"的自报，用独立事实核对。
 
@@ -42,6 +46,23 @@
 - 新会话必须等你发出**明确指令**后才可修改/创建/删除文件、commit 或开始下一阶段；
 - 旧会话此时可以退休（交接完成）；
 - 写操作仍须显式确认（与平时 DSH 写操作一致）。
+
+## 4. 高级功能（可选）
+
+- **签名（默认关闭）**：`handoff-kit sign <batchDir> --key <私钥.pem>` 写 `signature.json`；
+  `verify/load --pubkey <公钥.pem>` 核验；`signature.status` 为 `valid/untrusted/unsigned/invalid`，
+  只有 `invalid`（`SIGNATURE_INVALID`）会降 trust。私钥不要放进仓库/批次。
+- **脱敏策略**：`$DSH_HOME/handoff/policy.json` 只能**追加** denylist/redaction 规则；内置规则
+  不可关闭；非法配置 fail-closed（`HANDOFF_POLICY_INVALID`，零写入）；策略摘要记在
+  `evidence/redactions.json.policy`。
+- **删除批次**：工具/UI `delete`（默认软删除到 `.trash`，可恢复）；CLI `handoff-kit delete
+  <batchDir> [--hard] [--force]`；被 lineage 引用的批次默认拒绝，`--force` 才允许（可能让后代
+  `LINEAGE_BROKEN`）。
+- **审计回执**：`verify/load` 返回只读 `receipt`（checker/checkedAt/输入哈希），不落盘。
+- **路径存在性**：生成/校验发现 HANDOFF 引用的仓库路径已不存在 → `HANDOFF_PATH_MISSING`
+  （warn；生成时只警告，校验时使 trust=stale，不判 invalid）。
+
+## 5. 相关文档
 
 ## 2. 不要做的事
 
@@ -69,7 +90,7 @@
   也会只读回退并给出 `PROJECT_KEY_FALLBACK` 警告；写操作仍只写当前 key。
 - **同一批次再验变 stale**：只要被记录的仓库文件变过就会出现；这是正确的漂移检测。
 
-## 4. 相关文档
+## 5. 相关文档
 
 - 交接包字段与模块接口：[P0 模块接口](../../docs/handoff-kit/design/P0_module_interfaces.md)
 - P2 验收与已知缺口：[P2 验收记录](../../docs/handoff-kit/acceptance/P2.md)、[GAPS](../../docs/handoff-kit/GAPS.md)

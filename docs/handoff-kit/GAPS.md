@@ -25,7 +25,7 @@
 |---|---|---|---|---|
 | G1 | 无 `git status`（P0 禁子进程） | 设计边界 | 接受：P0 硬约束 + ADR-17；P1 用 `workspaceChanges` 真实改动缓解，仍不提供 dirty 状态 | `grep -rn "git status" plugins/dsh-handoff-kit/src` 应为空；HANDOFF H6 有 `NO_GIT_STATUS` warning |
 | G2 | fs 服务无 mtime | 设计边界 | 接受：宿主 fs 无此 API；H1 用会话 trace + git reflog + P1 changes 替代 | `grep -rn mtime src/` 为空；HANDOFF 含 `NO_MTIME_API` warning |
-| G3 | 无删除原语 | 设计边界 | 接受：`ctx.fs` 契约无 remove/delete（已核对）；提供**手动归档 runbook**（§2），插件不做删除 | 查 `node_modules/@deepseek-ai/dsh-fs/lib/types` 无 remove；`docs/handoff-kit/README` 有清理说明 |
+| G3 | 无删除原语 | 设计边界（**已缓解，M5b**） | 宿主 `ctx.fs` 仍无 remove/rename；M5b 删除实现：优先可选 `fs.rename`/`fs.remove` 能力，否则回退 `node:fs`（本地 Host；先过 target/sandbox 写权限门）。软删除到 `.trash`，CLI `--hard` 永久删除。远程/非本地后端若两者皆无则删除不可用（IO 错误） | `grep -rn "node:fs" plugins/dsh-handoff-kit/src/delete.js`；service/CLI delete E2E；GAPS §4 |
 | G4 | linked bundle 改 JS 需重启/重装 | 设计边界（工具链） | 接受：用 `remove_bundle` + `install_bundle` 往返加载（本次已多次执行） | `plugin_manager` 返回 `application: applied` + `version` 变化 |
 | G5 | read-only / workspace-write 未实测 | **已关闭** | 真实权限会话 `session-95c9d28f…`：`HANDOFF_READ_ONLY` / `HANDOFF_SANDBOX_DENIED` + `target=workspace` 成功（C3/C4/C2b） | 见 P0 验收 §5 C3/C4/C2b |
 | G6 | 首版 redaction 规则过宽 | **已关闭** | 规则收紧 + 回归测试；旧对照批次已归档 | `node --test test/redact.test.js`；归档目录查看旧批次 |
@@ -55,10 +55,10 @@
 
 | ID | 缺口 | 类别 | 状态与处置 | 复验方法 |
 |---|---|---|---|---|
-| P2-G1 | UI 工作台是 root 作用域，无会话绑定；无 hint 时 Host 回退选"最新 live 根会话"，可能落到其它项目 | 设计边界（已缓解） | 输入框「交接」点击时写 `localStorage["dsh.handoff-kit.lastSessionId"]`，工作台优先使用；Host 再退到最新 live 根会话，最后才是部署目录。点一次「交接」即固定到当前会话；P3 可加显式项目选择器 | DevTools `localStorage.getItem('dsh.handoff-kit.lastSessionId')`；工作台副标题显示 项目/批次/会话；`src/ui.js::resolveWorkspace` |
+| P2-G1 | UI 工作台是 root 作用域，无会话绑定；无 hint 时 Host 回退选"最新 live 根会话"，可能落到其它项目 | **已缓解（P3/M4+P3/M5）** | 输入框「交接」点击写已知会话；P3/M4 新增显式「项目/会话」栏（Host 解析 project/workspace/session + live/fallback 徽章 + 会话选择器 pin）；P3 回退显示同 slug 历史 project key 批次（只读横幅），写操作仍只落当前 key | 工作台副标题「项目/会话」；`src/ui.js::resolveWorkspace`、`client.js::projectSessionView` |
 | P2-G2 | 批次列表/详情不单列「血缘序号」 | 设计选择 | 接受：`handoff_load` 的 manifest 摘要不含 lineage，不为 UI 改 P1 契约；lineage 批次的 H0 摘要含「批次血缘：第 N 代，承接 …」，create/append 结果也返回 `lineage` | 对 append 批次打开「载入」详情，看 H0 摘要 |
-| P2-G3 | UI 文案仅中文、未接 locale 服务 | 设计边界（v1 决策） | 接受：P2 v1 中文 UI；P3 再评估 i18n | `grep -c "zh-CN\\|中文" plugins/dsh-handoff-kit/client.js`；无 locale 注册 |
-| P2-G4 | 无删除/归档 UI | 设计边界（宿主无删除原语） | 复用 G3 手动归档 runbook；UI 只读不提供删除 | G3 复验方法 |
+| P2-G3 | UI 文案仅中文、未接 locale 服务 | **已关闭（P3/M4）** | P3/M4 改为英文优先 + 中文保留，内嵌 EN/ZH 字典 + `locale/*.json`（测试同步），语言探测「显式偏好 > 浏览器 zh* > 页面 lang > 英文」，工作台/浮层中文/English 切换 | `test/client.test.js` i18n 用例；`locale/en.json`/`zh.json` |
+| P2-G4 | 无删除/归档 UI | **已关闭（P3/M5b）** | 工具 `action=delete`、`/handoff delete`、CLI `delete [--hard] [--force]`、工作台删除按钮 + 二次确认；默认软删除到 `.trash`（可恢复），CLI `--hard` 永久删除；被 lineage 引用默认拒绝（`HANDOFF_BATCH_REFERENCED`），`--force` 才允许 | `test/delete.test.js`；GAPS §4 |
 | P2-G5 | 新增 `dsh.client` 声明后需重启 Desktop 一次 | 设计边界（工具链） | 实测：client-modules 将"非 client 包"判定按 specifier 缓存到重启；声明变更后重启一次，之后 client 代码改动可 HMR 热更（无需重启） | 重启前后抓 `GET /plugins/events` 的 graph entries 是否含 `dsh-handoff-kit` |
 | P2-G7 | 包内证据覆盖 `docs/`：写验收记录本身会让刚生成的批次真实漂移；模型可见文本摘要只 1–3 行（沿用 P1-M1-G3） | 设计边界（记录自指 + P1 渲染契约） | 接受并如实记录：verified 证据以生成后、写记录前的带时间戳回执为准；需要"交付即 verified"时在文档冻结提交后最后生成一次并停止编辑被记录文件；UI 用结构化字段展示 findings/drift，不改 P1 文本渲染 | `handoff_load <batch>` 在记录编辑前后各跑一次，观察 `SOURCE_FILE_CHANGED: docs/...`；`src/tool.js::summarizeResult` |
 | P2-G8 | 开场提示词缺少强制只读门：新会话把"先读它，再继续工作"理解为立即开工，实际创建 P3 计划/修改仓库文件 | **已关闭（0.3.1）** | 修复：`renderOpeningPrompt` 首段强制边界（只读验证 + 等用户明确指令 + 禁止改文件/commit/自开新阶段），第 0 步强制 `handoff_load batchId=<id>`，非 verified 即停止；下一步降级为"仅供参考"；新增回归测试。越界草稿保留于 `%TEMP%\dsh-p3-plan-draft-20261022-214256\`，恢复后 `20ef` 复算 verified | `node --test test/ui.test.js`（`opening prompt embeds a mandatory read-only gate before any work`）；UI 复制提示词目视含安全门 |
@@ -146,3 +146,33 @@ profile `package.json` 手工修复前的备份：`package.json.bak-handoff-rehe
 4. 删除是显式写操作：只由 UI 按钮/CLI/工具动作触发；`verify`/`load`/`list` 仍只读。
 5. 实现排期：M5（签名/策略）完成后立即做（M5b），1.0 前验收；测试覆盖软删可恢复、硬删、
    血缘拒绝、删除后其它批次校验不受影响。
+
+**已实现（2026-10-23，待提交/rc.3）**：`src/delete.js` + service `action=delete` + CLI
+`delete [--hard] [--force]` + UI RPC `delete`/删除按钮（二次确认，只发软删）+ `/handoff delete`；
+软删移到 `<handoffRoot>/.trash/<projectKey>/<batchId>-<UTC timestamp>[-n]/`（`.trash` 不参与
+project key 扫描）；血缘保护扫描同 slug 批次的 `lineage.previous/supersedes`，被引用报
+`HANDOFF_BATCH_REFERENCED`，`force` 时警告 `BATCH_REFERENCED_FORCE`（后代可能 `LINEAGE_BROKEN`）。
+**实现事实（架构偏离）**：Host `ctx.fs` 仍无 rename/remove 原语（G3），删除 adapter 优先可选
+`fs.rename`/`fs.remove`，否则回退 `node:fs` 本地文件系统（先过 target/sandbox 写权限门）；
+远程/非本地后端若两者皆无则删除不可用（IO 错误）。测试 362 全绿。
+
+## 5. P3 收口补充（M5 + A 增强，2026-10-23）
+
+- **提示词步骤**（`src/ui.js::renderOpeningPrompt`）：0 强制只读门 → 1 概念（H2→H3→H4→H8）→
+  2 实际读取关键文件（role 优先，≤8）→ 3 re-grounding 核对叙述 vs 当前代码/引用路径 → 4 汇报
+  （trust/核对过的文件/不符清单）+ 等用户指令。P2-G8 的原安全门保持不变。
+- **H7 文案微调**：未发现 AGENTS.md 时输出“未发现 AGENTS.md”而非 `$WORKSPACE/AGENTS.md` 令牌，
+  避免 A2 路径检查误判（`render.test.js` 同步）。
+- **签名**：`signature.json` sidecar（不改变 manifest schema v2）；`keyId=sha256(publicKey PEM)[:16]`；
+  信任源 `--pubkey` → `$DSH_HOME/handoff/trusted-keys.json` → untrusted；`SIGNATURE_INVALID` error；
+  私钥只由 CLI `--key` 读取，不入批次/profile/会话。
+- **策略**：`$DSH_HOME/handoff/policy.json` 严格 schema、只能追加、内置地板不可关、fail-closed
+  `HANDOFF_POLICY_INVALID`；应用 create/append/update（scan 预览也读）；**migrate 不读**（只复制
+  源批次）；provenance 在 `evidence/redactions.json.policy`。
+- **回执**：verify/load 结果级 `receipt`（只读、不落盘；除 checkedAt 外稳定）。
+- **新增码**：`SIGNATURE_INVALID`（error）、`HANDOFF_PATH_MISSING`（warn）、
+  `HANDOFF_BATCH_REFERENCED`（error）、`BATCH_REFERENCED_FORCE`/`BATCH_HARD_DELETED`（warnings）。
+- **A2 边界**：只解析仓库相对路径与 `$WORKSPACE`；`$DSH_HOME` 提取但不解析；URL/纯文件名/含空格/
+  绝对/`..` 忽略；CLI 仅在带 `--workspace` 时检查；无 workspace 时跳过且不误报。
+- **验证**：`npm test` 362 全绿（303→331→362）；`docs:check` 0 error；真实 bin E2E：sign→verify
+  `--pubkey`（signature=valid/trust=verified）→ 软删除到 `.trash`（原目录消失、trash 内容完整）。

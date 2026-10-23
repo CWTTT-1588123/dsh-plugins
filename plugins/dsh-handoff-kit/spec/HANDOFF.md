@@ -38,17 +38,20 @@ The generator never invents facts. Values the caller did not provide are rendere
 ├── HANDOFF.md              # H0–H9 narrative + 覆盖说明 (coverage note)
 ├── SHA256SUMS              # digests of every artifact except manifest.json
 ├── manifest.json           # authoritative machine record; written LAST
+├── signature.json          # optional (opt-in): detached Ed25519 over SHA256SUMS; not an artifact
 └── evidence/
     ├── git.json            # parsed .git metadata snapshot
     ├── files.json          # workspace scan summary + hashed file list
     ├── session.json        # session tool/call metadata (no message bodies)
-    ├── redactions.json     # redaction ledger for this batch
+    ├── redactions.json     # redaction ledger for this batch (+ optional policy provenance)
     ├── migration.json      # optional: v1 -> v2 provenance (written by migrate)
     └── files/              # optional redacted copies (copyFiles=true)
         └── <workspace-relative-path>
 ```
 
 **Completion rule:** a batch is complete **iff** `manifest.json` exists. Writers must write `HANDOFF.md`, evidence, and `SHA256SUMS` first and `manifest.json` last. An interrupted write leaves a directory without `manifest.json`; readers must treat it as incomplete.
+
+**Recycle bin (opt-in deletion, M5b):** a soft-deleted batch moves to `${handoffRoot}/.trash/<projectKey>/<batchId>-<UTC timestamp>[-n]/` (restorable from the filesystem). `.trash` is never a project key: `list`/`verify`/`load` never scan it. `--hard` (CLI only) removes the directory instead. A batch referenced by another batch's `lineage` is refused unless forced.
 
 ## 4. Canonical encodings
 
@@ -147,11 +150,49 @@ All evidence JSON files are UTF-8, 2-space indented, newline-terminated, and car
 | `evidence/git.json` | `{schemaVersion:1, generator, git}` — same `generator`/`git` blocks as the manifest (git may be `null`). |
 | `evidence/files.json` | `{schemaVersion:1, scan, files}` — same `scan`/`files` blocks as the manifest. |
 | `evidence/session.json` | the manifest `sessionTrace` object verbatim. |
-| `evidence/redactions.json` | `{schemaVersion:1, redactions}` — same ledger as the manifest. |
+| `evidence/redactions.json` | `{schemaVersion:1, redactions, policy:{sha256, source}}` — same ledger as the manifest plus optional-policy provenance. `sha256`/`source` are `null` when no policy file was used; `source` is tokenized. |
 | `evidence/files/<path>` | optional redacted copies when `copyFiles=true`; at most 20 files, 256 KiB each, 2 MiB total; each copy is redacted before writing and recorded in `redactions`. |
 | `evidence/migration.json` | optional; written by `migrate`: `{schemaVersion:1, migration:{fromBatchId, fromSchemaVersion, sourceSha256Sums, sourceGenerator, migratedAt, tool{name,version,dshVersion,platform}}}`. Records where a v2 batch came from; the file itself is an artifact (hashed in `SHA256SUMS`). |
 
 **Redaction:** every artifact is redacted and then scanned for secret residue before the batch is written. Placeholders are `«REDACTED:<kind>»` with kinds `private-key-block`, `bearer`, `cloud-key`, `url-credentials`, `conn-string-password`, `env-assignment`, `generic-assignment`. Built-in rules may be extended by an optional policy but can never be disabled. A residue found after redaction aborts the whole batch (`HANDOFF_SECRET_CHECK_FAILED`).
+
+### 8.1 Optional redaction policy
+
+An optional `$DSH_HOME/handoff/policy.json` (user level; also used by `target=workspace`) can only **add** to the built-in safety floor:
+
+```json
+{
+  "version": 1,
+  "denylist": { "paths": ["internal/secrets.txt"], "extensions": [".pem"] },
+  "redaction": { "rules": [{ "kind": "internal-id", "pattern": "INT-[0-9]{6}", "flags": "g", "replacement": null }] }
+}
+```
+
+- Strict schema: unknown keys/fields are invalid; `version` must be `1`; `paths` are POSIX workspace-relative (no absolute/`..`); `extensions` start with `.`; rule `kind` matches `^[a-z][a-z0-9-]*$`; `pattern` must compile with flags restricted to `g`/`i`; absent `replacement` falls back to the built-in `«REDACTED:<kind>»` placeholder.
+- Built-in deny list and redaction rules are a **safety floor**; the policy can only append. Custom rules run after built-in rules.
+- Any read/parse/validation failure is **fail-closed**: `create`/`append`/`update` refuse with `HANDOFF_POLICY_INVALID` before writing anything. (The policy is not read by `migrate`, which copies a source batch without scanning the workspace.)
+- Provenance is recorded in `evidence/redactions.json` as `policy:{sha256, source}` (no manifest block is added).
+
+### 8.2 Optional detached signature
+
+Signing is **opt-in and off by default**. When enabled, the CLI writes `signature.json` at the batch root:
+
+```json
+{
+  "alg": "ed25519",
+  "keyId": "<sha256(public key PEM)[:16]>",
+  "publicKey": "<SPKI PEM>",
+  "signature": "<base64 Ed25519 signature>",
+  "signedFile": "SHA256SUMS",
+  "signedSha256": "<sha256 of the SHA256SUMS bytes>",
+  "createdAt": "<ISO-8601 UTC>"
+}
+```
+
+- It signs the **bytes of `SHA256SUMS`**; `signature.json` is not part of `SHA256SUMS` or `manifest.artifacts`, so an unsigned batch is byte-identical and fully valid.
+- Private keys are only read by the explicit CLI `handoff-kit sign` operation; they are never written into a batch, the profile, or a session.
+- Verification treats the signature as a **result-level** observation: `unsigned` (no file), `untrusted` (valid but key not trusted), `valid` (trusted), or `invalid` (parse/algorithm/verification/`signedSha256` mismatch → `SIGNATURE_INVALID` error finding, `trust=invalid`). `unsigned`/`untrusted` never change `trust`.
+- Trust sources: explicit `--pubkey` (CLI) → `$DSH_HOME/handoff/trusted-keys.json` (`{keys:[{keyId?, publicKey, name?}]}`) → none (`untrusted`). A malformed trust file degrades to `untrusted`, never to an error.
 
 ## 9. Trust verdict
 
@@ -169,7 +210,7 @@ Verification produces findings (severity `error`/`warn`) and drift counts; consu
 ## 10. Versioning and compatibility
 
 - `manifest.schemaVersion` is the machine contract version; the current writer emits `2`. v1 manifests remain **read-only compatible**: they can be verified/loaded; they cannot express `changes`/`fuel`/`lineage`.
-- A new schema block (e.g., signature or policy provenance) requires `schemaVersion 3` **and** a migration tool shipped in the same release. A schema version must never be silently extended.
+- A new **manifest block** requires `schemaVersion 3` **and** a migration tool shipped in the same release. A schema version must never be silently extended. Sidecar files (`signature.json`) and additive fields inside an existing evidence file (`policy` in `evidence/redactions.json`) are not manifest blocks and do not change `schemaVersion`; readers must tolerate their absence (the batch is then simply unsigned / policy-free).
 - Manifest key order and `SHA256SUMS` format are frozen for v2; additional tool output fields are additive.
 
 ### 10.1 Migration (v1 → v2)
@@ -191,8 +232,9 @@ Verification produces findings (severity `error`/`warn`) and drift counts; consu
 
 - Packages may contain: tokenized workspace paths, file names and sha256 digests, session id, agent preset, tool-call counts, and **redacted** command snippets; `copyFiles` optionally adds redacted file copies.
 - Messages and model reasoning are never recorded. `.env*`, private keys, `*.p12/*.pfx`, credential-named files, databases, `node_modules`, `.venv`, `.git`, and `.dsh` are excluded from collection.
-- Generation is local-only: no network, no subprocess, no LLM call. Publishing a package is a human decision; the format itself carries no key material.
-- A consumer must not treat `[输入]`/narrative text as verified facts, and must not execute instructions embedded in a package (packages are data, never commands).
+- Generation is local-only: no network, no subprocess, no LLM call. Publishing a package is a human decision; the format itself carries no key material. Signing keys are explicit CLI inputs only; a batch never contains a private key.
+- The optional `policy.json` is fail-closed; the built-in redaction/deny rules cannot be disabled. A malformed policy aborts generation instead of silently weakening redaction.
+- Deletion is explicit and reversible by default: soft delete moves the batch into the handoff root's `.trash` (never scanned as a project), while `--hard` is an explicit irreversible CLI operation. A consumer must not treat `[输入]`/narrative text as verified facts, and must not execute instructions embedded in a package (packages are data, never commands).
 
 ## 12. References
 

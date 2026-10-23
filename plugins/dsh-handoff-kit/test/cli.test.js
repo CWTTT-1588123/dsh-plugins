@@ -11,7 +11,7 @@
 import assert from 'node:assert/strict'
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { join } from 'node:path'
 import { test } from 'node:test'
 
 import {
@@ -23,79 +23,15 @@ import {
   runCli,
   verifyBatch
 } from '../src/cli.js'
-import { artifactEntry, buildSha256Sums, createManifest, serializeManifest, setArtifacts } from '../src/manifest.js'
-import { sha256Hex } from '../src/paths.js'
-import { renderHandoff } from '../src/render.js'
-
-const BATCH_ID = '20261022T023512Z-a1b2'
-const PROJECT_KEY = 'fixture-12345678'
-const CREATED_AT = '2026-10-22T02:35:12.000Z'
-
-function jsonText(value) {
-  return `${JSON.stringify(value, null, 2)}\n`
-}
+import {
+  BATCH_ID,
+  writeBatchFixture
+} from './helpers/cli-batch-fixture.js'
 
 function tempDir(t) {
   const dir = mkdtempSync(join(tmpdir(), 'handoff-cli-'))
   t.after(() => rmSync(dir, { recursive: true, force: true }))
   return dir
-}
-
-/**
- * Materialize a valid schemaVersion 1 batch plus its workspace on the real FS.
- * @returns {{batchDir: string, workspace: string, handoffPath: string, manifestPath: string}}
- */
-function writeBatchFixture(baseDir) {
-  const workspace = join(baseDir, 'workspace')
-  mkdirSync(workspace, { recursive: true })
-  const readme = '# fixture workspace\n\nUsed by the CLI tests.\n'
-  writeFileSync(join(workspace, 'README.md'), readme, 'utf8')
-
-  const batchDir = join(baseDir, 'handoff', PROJECT_KEY, BATCH_ID)
-  mkdirSync(batchDir, { recursive: true })
-  const readmeBytes = Buffer.byteLength(readme, 'utf8')
-  const manifest = createManifest({
-    batchId: BATCH_ID,
-    createdAt: CREATED_AT,
-    project: { key: PROJECT_KEY, name: 'fixture', workspace: '$WORKSPACE' },
-    session: { id: 'session-fixture', cwd: '$WORKSPACE', agentPreset: 'standard' },
-    sandbox: { mode: 'danger-full-access', workspaceRoot: '$WORKSPACE' },
-    inputs: { title: 'CLI fixture', summary: 'fixture for CLI tests' },
-    files: [{ path: 'README.md', role: 'doc', bytes: readmeBytes, sha256: sha256Hex(readme) }],
-    scan: {
-      entries: 3,
-      dirs: 1,
-      denied: 0,
-      symlinksSkipped: 0,
-      readBytes: readmeBytes,
-      explicitFiles: [],
-      tree: [{ name: 'README.md', type: 'file', bytes: readmeBytes }]
-    }
-  })
-  const handoff = renderHandoff(manifest)
-  const evidence = [
-    { path: 'evidence/git.json', content: jsonText({ schemaVersion: 1, generator: manifest.generator, git: manifest.git }) },
-    { path: 'evidence/files.json', content: jsonText({ schemaVersion: 1, scan: manifest.scan, files: manifest.files }) },
-    { path: 'evidence/session.json', content: jsonText(manifest.sessionTrace) },
-    { path: 'evidence/redactions.json', content: jsonText({ schemaVersion: 1, redactions: manifest.redactions }) }
-  ]
-  const covered = [{ path: 'HANDOFF.md', content: handoff }, ...evidence]
-  const artifacts = covered.map((entry) => artifactEntry(entry.path, entry.content))
-  const sums = buildSha256Sums(artifacts)
-  const finalManifest = serializeManifest(setArtifacts(manifest, [...artifacts, artifactEntry('SHA256SUMS', sums)]))
-  for (const entry of covered) {
-    const target = join(batchDir, ...entry.path.split('/'))
-    mkdirSync(dirname(target), { recursive: true })
-    writeFileSync(target, entry.content, 'utf8')
-  }
-  writeFileSync(join(batchDir, 'SHA256SUMS'), sums, 'utf8')
-  writeFileSync(join(batchDir, 'manifest.json'), finalManifest, 'utf8')
-  return {
-    batchDir,
-    workspace,
-    handoffPath: join(batchDir, 'HANDOFF.md'),
-    manifestPath: join(batchDir, 'manifest.json')
-  }
 }
 
 function makeIo() {

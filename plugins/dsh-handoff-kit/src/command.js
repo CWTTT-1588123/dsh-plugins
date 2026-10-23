@@ -21,7 +21,7 @@ import {
 /** Input hint shown by the slash-command palette. */
 export const COMMAND_DESCRIPTION = '生成/校验/消费会话交接包（HANDOFF.md + manifest.json）'
 export const COMMAND_HINT =
-  '[create|append|update|scan|verify|list|migrate|resume] [--target user|workspace] [--title TEXT] [--batch ID] [--previous ID] [--supersedes ID] [--force] [--include-diffs] [--include summary|sections|full] [--no-verify]'
+  '[create|append|update|scan|verify|list|migrate|delete|resume] [--target user|workspace] [--title TEXT] [--batch ID] [--previous ID] [--supersedes ID] [--force] [--include-diffs] [--include summary|sections|full] [--no-verify]'
 
 /** Command-only actions on top of the tool actions. */
 const COMMAND_ACTIONS = [...ACTIONS, 'resume']
@@ -88,7 +88,7 @@ export function parseCommandInput(rawInput) {
     }
   }
   if (positional.length > 0) {
-    if ((action === 'verify' || action === 'resume' || action === 'migrate') && raw.batchId === undefined)
+    if ((action === 'verify' || action === 'resume' || action === 'migrate' || action === 'delete') && raw.batchId === undefined)
       raw.batchId = positional.shift()
     if (positional.length > 0)
       throw handoffError(ERROR.INVALID_ARGS, `多余的参数：${positional.join(' ')}`)
@@ -186,6 +186,18 @@ export function formatResult(result) {
         `下一步：handoff_load batchId=${result.batchId} 复核新批次。`
       )
     }
+    case 'delete': {
+      const hard = result.mode === 'hard'
+      return (
+        `${hard ? '交接包已永久删除（不可恢复）' : '交接包已移入回收站（可从文件系统恢复）'}：` +
+        `${result.batchId ?? '?'}（项目 ${result.projectKey ?? result.project?.key ?? '?'}）\n` +
+        (hard
+          ? `已删除目录：${result.displayDir ?? result.dir}\n`
+          : `回收站位置：${result.trashDir ?? '(unknown)'}\n原目录：${result.displayDir ?? result.dir}\n`) +
+        (result.warnings?.length > 0 ? `注意：${result.warnings[0].detail}\n` : '') +
+        '下一步：/handoff list 刷新批次列表。'
+      )
+    }
     default:
       return `handoff_pack ${String(result.action)} 完成。`
   }
@@ -207,6 +219,8 @@ const REMEDIES = {
   [ERROR.MANIFEST_MISSING]: '批次缺少 manifest.json（不完整）：不要采信；可重跑 create --force。',
   [ERROR.MANIFEST_INVALID]: 'manifest.json 无法解析/校验：批次已损坏，不要采信；重新生成。',
   [ERROR.SECRET_CHECK_FAILED]: '终检发现密钥残留：整批已放弃写入，请缩小 files 范围或先清理敏感内容。',
+  [ERROR.POLICY_INVALID]: '脱敏策略配置无效（$DSH_HOME/handoff/policy.json）：已按 fail-closed 拒绝生成，请修正或删除该文件后重试。',
+  [ERROR.BATCH_REFERENCED]: '该批次仍被其它批次的 lineage 引用：先删除更新的后代批次，或显式 force（会让后代出现 LINEAGE_BROKEN）。',
   [ERROR.WRITE_FAILED]: '写入失败：查看错误详情；已写入文件保留（无删除 API），可用 --force 重试。',
   [ERROR.READ_FAILED]: '读取失败：确认工作区路径可读且未被删除。',
   [ERROR.INTERNAL]: '内部错误：保留完整错误信息并报告给插件维护者。'

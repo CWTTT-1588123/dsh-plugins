@@ -7,6 +7,50 @@
 
 ## [Unreleased]
 
+## [1.0.0-rc.3] - 2026-10-23
+
+P3 M5 可信度外层 + 转接增强（re-grounding / 路径存在性）+ M5b 批次删除。
+P0–P2 运行边界不变（零依赖 / 无网络 / 无子进程 / 无 LLM / 历史批次不原地重写）。
+
+### Added
+
+- **签名（opt-in Ed25519，默认关闭）**：CLI `handoff-kit sign <batchDir> --key <pem> [--force]`
+  写批次根 `signature.json`（detached，签 `SHA256SUMS` 字节，不进 `SHA256SUMS`/`manifest.artifacts`）；
+  `verify`/`load` 输出结果级 `signature` 状态（`valid` / `untrusted` / `unsigned` / `invalid`），
+  `invalid` 产生 `SIGNATURE_INVALID` error（trust=invalid），其余不影响 trust。信任来源：
+  `--pubkey` → `$DSH_HOME/handoff/trusted-keys.json` → 无来源则 `untrusted`。
+- **审计回执**：`verify`/`load` 输出结果级 `receipt{checker{name,version}, checkedAt,
+  inputs{manifestSha256,sumsSha256,handoffSha256}}`（只读、不落盘；除 checkedAt 外稳定）。
+- **脱敏策略（可选 `$DSH_HOME/handoff/policy.json`）**：严格 schema；只能追加 denylist
+  （路径/扩展名）与自定义 redaction 规则，内置规则为不可关闭的安全地板；非法配置
+  **fail-closed**（`HANDOFF_POLICY_INVALID`，写前失败、零写入）；`evidence/redactions.json`
+  增 `policy:{sha256, source}` provenance（manifest 结构不变）。
+- **批次删除（M5b）**：`handoff_pack action=delete`、`/handoff delete`、CLI
+  `handoff-kit delete <batchDir> [--hard] [--force]`、工作台删除按钮 + 二次确认。默认**软删除**
+  到 `<handoffRoot>/.trash/<projectKey>/<batchId>-<时间戳>/`（可恢复）；CLI `--hard` 永久删除；
+  被其它批次 `lineage` 引用时 `HANDOFF_BATCH_REFERENCED` 拒绝，`--force` 才允许（强警告）。
+- **转接增强 A1（re-grounding）**：开场提示词新增第 2/3 步——实际打开 H4/文件清单中的关键文件
+  （role 优先 entry/source/test/doc，≤8 个）阅读，并核对「HANDOFF 叙述 vs 当前代码/文件」及
+  引用路径是否仍存在；汇报“我核对过的文件/不符清单”，仍先等用户指令再改文件。
+- **转接增强 A2（路径存在性）**：`HANDOFF_PATH_MISSING`——生成时 HANDOFF 引用的仓库相对路径
+  缺失记入生成 warnings（不阻断）；verify/load（CLI 带 `--workspace`）记 warn finding
+  （trust=stale，不判 invalid）；忽略 URL/纯文件名/空格路径/逃逸，`$DSH_HOME` 不解析。
+
+### Changed
+
+- 版本 `1.0.0-rc.2` → `1.0.0-rc.3`；测试 303 → **362**。
+- Host `fs` service 无 rename/remove 原语（GAPS G3）：删除 adapter 优先可选 `fs.rename`/`fs.remove`
+  能力，否则回退 `node:fs`（本地 Host 文件系统；先过 target/sandbox 写权限门）。
+- H7 文案微调：未发现 AGENTS.md 时不再输出 `$WORKSPACE/AGENTS.md` 绝对令牌形式（避免 A2 误判）。
+
+### Known limitations
+
+- 删除的 Host 回退依赖本地文件系统；远程/非本地后端若既无 `fs.rename`/`fs.remove` 能力也不共享
+  本地磁盘，删除不可用（会返回 IO 错误）。
+- `migrate` 不读取 policy（只复制源批次，不扫描/复制用户工作区文件）。
+- 过宽的自定义 redaction 规则可能让终检（`HANDOFF_SECRET_CHECK_FAILED`）意外拒绝生成
+  （fail-closed，属预期安全行为）。
+
 ## [1.0.0-rc.2] - 2026-10-23
 
 rc.1 发布后的界面与项目标识回归修复（P0–P2 运行边界不变：零依赖 / 无网络 / 无子进程 /

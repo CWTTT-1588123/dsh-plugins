@@ -248,7 +248,8 @@ export function extractTouchedPaths(toolName, args) {
  *   totalEvents?: number,
  *   contexts?: {workspaceRoot?: string, dshHome?: string},
  *   limits?: {sessionMaxEvents?: number, sessionMaxFiles?: number,
- *     sessionMaxCommands?: number, sessionMaxCommandChars?: number}
+ *     sessionMaxCommands?: number, sessionMaxCommandChars?: number},
+ *   redactionRules?: ReadonlyArray<{kind: string, pattern: RegExp, replacement?: string}>
  * }} [input]
  * @returns {{
  *   sessionId: string|null,
@@ -265,7 +266,8 @@ export function buildSessionTrace({
   events = [],
   totalEvents,
   contexts = {},
-  limits
+  limits,
+  redactionRules
 } = {}) {
   const context = isPlainObject(contexts) ? contexts : {}
   const bounds = resolveSessionLimits(limits)
@@ -314,7 +316,7 @@ export function buildSessionTrace({
       } else if (SHELL_TOOL_SET.has(name)) {
         const command = typeof args.command === 'string' ? args.command : ''
         if (command.trim() === '') continue
-        const redacted = redactText(command)
+        const redacted = redactText(command, redactionRules)
         for (const hit of redacted.hits) {
           redactionCounts.set(hit.kind, (redactionCounts.get(hit.kind) ?? 0) + hit.count)
         }

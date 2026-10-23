@@ -14,7 +14,7 @@
 /** Package name; also the Cordis plugin name. */
 export const PLUGIN_NAME = 'dsh-handoff-kit'
 /** One semantic version for the generator, mirrored in package.json. */
-export const PLUGIN_VERSION = '1.0.0-rc.2'
+export const PLUGIN_VERSION = '1.0.0-rc.3'
 /** Manifest schema version owned by this generator. */
 export const SCHEMA_VERSION = 1
 /** P1/M2 manifest schema version: v1 fields + optional changes/fuel/lineage. */
@@ -37,8 +37,19 @@ export const MANIFEST_FILE = 'manifest.json'
 export const EVIDENCE_DIR = 'evidence'
 export const EVIDENCE_FILES_DIR = 'evidence/files'
 
-/** The tool actions, in a stable order (append/update are P1/M2 additions; migrate is P3/M2). */
-export const ACTIONS = Object.freeze(['scan', 'create', 'verify', 'list', 'append', 'update', 'migrate'])
+/** The tool actions, in a stable order (append/update P1/M2; migrate P3/M2; delete P3/M5b). */
+export const ACTIONS = Object.freeze([
+  'scan',
+  'create',
+  'verify',
+  'list',
+  'append',
+  'update',
+  'migrate',
+  'delete'
+])
+/** Deletion modes: default soft delete into the handoff recycle bin; `hard` is CLI-only. */
+export const DELETE_MODES = Object.freeze(['trash', 'hard'])
 /** Output targets. `user` is the default; `workspace` is the explicit downgrade. */
 export const TARGETS = Object.freeze(['user', 'workspace'])
 /** Target directory suffixes under each root. */
@@ -77,6 +88,10 @@ export const ERROR = Object.freeze({
   WRITE_FAILED: 'HANDOFF_WRITE_FAILED',
   READ_FAILED: 'HANDOFF_READ_FAILED',
   SECRET_CHECK_FAILED: 'HANDOFF_SECRET_CHECK_FAILED',
+  /** P3/M5: the optional `$DSH_HOME/handoff/policy.json` is unreadable or invalid. */
+  POLICY_INVALID: 'HANDOFF_POLICY_INVALID',
+  /** P3/M5b: a batch is still referenced by another batch's lineage; delete needs force. */
+  BATCH_REFERENCED: 'HANDOFF_BATCH_REFERENCED',
   INTERNAL: 'HANDOFF_INTERNAL'
 })
 
@@ -143,12 +158,14 @@ export const TOOL_TIMEOUT_MS = LIMITS.toolTimeoutMs
 
 /** Tool description shown to the model (English, per ADR decision 10). */
 export const TOOL_DESCRIPTION =
-  'Create, scan, verify, list, append, update, or migrate deterministic session handoff packages ' +
+  'Create, scan, verify, list, append, update, migrate, or delete deterministic session handoff packages ' +
   '(HANDOFF.md + manifest.json) for the current workspace. Use before ending a long ' +
   'session or handing work to a new session; append/update create a new batch linked to the ' +
   'previous one (append-only, never rewriting history). migrate upgrades a schemaVersion 1 batch ' +
-  'to schemaVersion 2 by writing a NEW batch (the source stays read-only). A new session should ' +
-  'call handoff_load (or verify) before trusting a package.'
+  'to schemaVersion 2 by writing a NEW batch (the source stays read-only). delete moves a batch to ' +
+  'the handoff recycle bin (soft delete; only the CLI can delete permanently, and a lineage-' +
+  'referenced batch needs force). A new session should call handoff_load (or verify) before ' +
+  'trusting a package.'
 
 /** A scalar that may be absent as `null` when a file captured it that way. */
 const nullableString = () => ({ oneOf: [{ type: 'string' }, { type: 'null' }] })
@@ -230,6 +247,58 @@ const WARNING_SCHEMA = Object.freeze({
 })
 
 /**
+ * P3/M5 signature verification states (decision D7). Only `invalid` produces an
+ * error finding (`SIGNATURE_INVALID`) and changes `trust`; `unsigned` and
+ * `untrusted` are informational.
+ */
+export const SIGNATURE_STATUSES = Object.freeze(['valid', 'untrusted', 'invalid', 'unsigned'])
+
+/** Result-level signature block added to `verify`/`load` results. */
+const SIGNATURE_RESULT_SCHEMA = Object.freeze({
+  type: 'object',
+  additionalProperties: false,
+  required: ['status'],
+  properties: {
+    status: { type: 'string', enum: [...SIGNATURE_STATUSES] },
+    keyId: { type: 'string', description: '16-hex key id of the signing public key.' },
+    detail: { type: 'string', description: 'Human-readable explanation (never a secret).' }
+  }
+})
+
+/**
+ * Result-level audit receipt (decision D8): checker identity/version, the check
+ * instant and the hashes of the three input files. Read-only; every field
+ * except `checkedAt` is stable for unchanged inputs.
+ */
+const RECEIPT_SCHEMA = Object.freeze({
+  type: 'object',
+  additionalProperties: false,
+  required: ['checker', 'checkedAt', 'inputs'],
+  properties: {
+    checker: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['name', 'version'],
+      properties: {
+        name: { type: 'string' },
+        version: { type: 'string' }
+      }
+    },
+    checkedAt: { type: 'string' },
+    inputs: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['manifestSha256', 'sumsSha256', 'handoffSha256'],
+      properties: {
+        manifestSha256: nullableString(),
+        sumsSha256: nullableString(),
+        handoffSha256: nullableString()
+      }
+    }
+  }
+})
+
+/**
  * Canonical tool output schema. It belongs to the enforced JSON Schema subset
  * the harness accepts for tool outputs, so it uses only
  * type/oneOf/properties/required/additionalProperties/items/enum plus
@@ -255,6 +324,19 @@ export const TOOL_OUTPUT_SCHEMA = Object.freeze({
       }
     },
     batchId: { type: 'string' },
+    projectKey: {
+      type: 'string',
+      description: 'delete: project key the batch was located under (historical keys included).'
+    },
+    mode: {
+      type: 'string',
+      enum: [...DELETE_MODES],
+      description: 'delete: trash = moved to the readable recycle bin; hard = permanently removed (CLI only).'
+    },
+    trashDir: {
+      type: 'string',
+      description: 'delete (trash): tokenized directory the batch was moved to, recoverable from the filesystem.'
+    },
     git: {
       type: 'object',
       additionalProperties: false,
@@ -392,6 +474,14 @@ export const TOOL_OUTPUT_SCHEMA = Object.freeze({
         }
       }
     },
+    signature: {
+      ...SIGNATURE_RESULT_SCHEMA,
+      description: 'P3/M5 opt-in Ed25519 signature status for this batch (verify/load only).'
+    },
+    receipt: {
+      ...RECEIPT_SCHEMA,
+      description: 'P3/M5 read-only audit receipt for this verification (verify/load only).'
+    },
     batches: {
       type: 'array',
       items: {
@@ -440,7 +530,8 @@ export const TOOL_ARGUMENTS_SCHEMA = Object.freeze({
       description:
         'scan = collect evidence and preview without writing; create = write a batch; ' +
         'verify = read-only hash/drift check of one batch; list = read-only batch listing; ' +
-        'migrate = read-only schemaVersion 1 source -> new schemaVersion 2 batch.'
+        'migrate = read-only schemaVersion 1 source -> new schemaVersion 2 batch; ' +
+        'delete = move one batch to the handoff recycle bin (soft delete; the CLI can delete permanently).'
     },
     target: {
       type: 'string',
@@ -498,7 +589,7 @@ export const TOOL_ARGUMENTS_SCHEMA = Object.freeze({
     batchId: {
       type: 'string',
       description:
-        'verify/list/migrate locator: YYYYMMDDTHHmmssZ-xxxx. Omitted = latest batch of this project (migrate requires it).'
+        'verify/list/migrate/delete locator: YYYYMMDDTHHmmssZ-xxxx. Omitted = latest batch of this project (migrate and delete require it).'
     },
     all: {
       type: 'boolean',
@@ -509,7 +600,8 @@ export const TOOL_ARGUMENTS_SCHEMA = Object.freeze({
       type: 'boolean',
       default: false,
       description:
-        'Allow overwriting an existing or incomplete batch directory. Default createIfAbsent.'
+        'create/append/update: allow overwriting an existing or incomplete batch directory. ' +
+        'delete: also delete a batch that other batches still reference via lineage (their LINEAGE_BROKEN warning follows).'
     },
     previousBatchId: {
       type: 'string',
@@ -638,6 +730,14 @@ export const LOAD_OUTPUT_SCHEMA = Object.freeze({
           }
         }
       }
+    },
+    signature: {
+      ...SIGNATURE_RESULT_SCHEMA,
+      description: 'P3/M5 opt-in Ed25519 signature status for this batch.'
+    },
+    receipt: {
+      ...RECEIPT_SCHEMA,
+      description: 'P3/M5 read-only audit receipt for this load/verification.'
     },
     handoff: {
       type: 'object',
@@ -834,10 +934,12 @@ export function validateToolArgs(raw) {
   const batchId = consumeString(raw, 'batchId', 40)
   if (batchId !== undefined && !BATCH_ID_RE.test(batchId))
     throw invalid('batchId must match YYYYMMDDTHHmmssZ-xxxx (lower-case hex suffix)')
-  if (!['verify', 'list', 'migrate'].includes(action) && batchId !== undefined)
-    throw invalid('batchId is only valid for verify, list and migrate')
+  if (!['verify', 'list', 'migrate', 'delete'].includes(action) && batchId !== undefined)
+    throw invalid('batchId is only valid for verify, list, migrate and delete')
   if (action === 'migrate' && batchId === undefined)
     throw invalid('migrate requires an explicit batchId (the schemaVersion 1 source batch)')
+  if (action === 'delete' && batchId === undefined)
+    throw invalid('delete requires an explicit batchId')
   const previousBatchId = consumeString(raw, 'previousBatchId', 40)
   if (previousBatchId !== undefined && !BATCH_ID_RE.test(previousBatchId))
     throw invalid('previousBatchId must match YYYYMMDDTHHmmssZ-xxxx')
@@ -851,7 +953,8 @@ export function validateToolArgs(raw) {
   const all = consumeBoolean(raw, 'all', false)
   if (all && action !== 'list') throw invalid('all is only valid for list')
   const force = consumeBoolean(raw, 'force', false)
-  if (force && !isCreateLike) throw invalid('force is only valid for create/append/update')
+  if (force && !isCreateLike && action !== 'delete')
+    throw invalid('force is only valid for create/append/update/delete')
   const includeDiffs = consumeBoolean(raw, 'includeDiffs', false)
   if (includeDiffs && !isCreateLike) throw invalid('includeDiffs is only valid for create/append/update')
 

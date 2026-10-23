@@ -23,6 +23,7 @@
 import { join } from 'node:path'
 
 import {
+  BATCH_ID_RE,
   ERROR,
   HANDOFF_SUBDIR,
   TARGETS,
@@ -36,6 +37,7 @@ import {
 } from './contracts.js'
 import { resolveDshHome } from './service.js'
 import { projectKeySlug } from './paths.js'
+import { normalizeProjectKey } from './delete.js'
 
 /** Wire protocol version; a Client from another major refuses to talk. */
 export const UI_RPC_PROTOCOL = 1
@@ -44,7 +46,7 @@ export const UI_RPC_PATH = '/api/handoff-kit/rpc'
 /** Request body cap: the UI only sends small JSON. */
 export const UI_RPC_MAX_BODY_BYTES = 256 * 1024
 /** Methods the Client may call, in a stable order. */
-export const UI_RPC_METHODS = Object.freeze(['state', 'detail', 'copy', 'create'])
+export const UI_RPC_METHODS = Object.freeze(['state', 'detail', 'copy', 'create', 'delete'])
 
 /** Parameters accepted per method (unknown keys are rejected, not ignored). */
 const METHOD_PARAMS = Object.freeze({
@@ -63,7 +65,8 @@ const METHOD_PARAMS = Object.freeze({
     'force',
     'previousBatchId',
     'supersedes'
-  ])
+  ]),
+  delete: Object.freeze(['sessionId', 'target', 'batchId', 'projectKey', 'force'])
 })
 
 /** Create-mode actions the UI may request. */
@@ -89,6 +92,8 @@ export function remedyFor(code) {
       return '没有可继续的目标批次：先在「生成」里创建一包，再继续交接。'
     case ERROR.LINEAGE_CYCLE:
       return '血缘目标不合法（不能串到自己）：留空以使用最新批次。'
+    case ERROR.BATCH_REFERENCED:
+      return '该批次仍被其它批次的 lineage 引用：先删除更新的后代批次，或显式 force（会让后代出现 LINEAGE_BROKEN）。'
     case ERROR.MANIFEST_MISSING:
     case ERROR.MANIFEST_INVALID:
     case ERROR.VERIFY_INVALID:
@@ -102,6 +107,8 @@ export function remedyFor(code) {
       return '宿主读写失败：检查目录权限与磁盘空间后重试。'
     case ERROR.SECRET_CHECK_FAILED:
       return '检测到疑似密钥内容：清理后重新生成。'
+    case ERROR.POLICY_INVALID:
+      return '脱敏策略配置无效（$DSH_HOME/handoff/policy.json）：已按 fail-closed 拒绝生成，请修正或删除该文件后重试。'
     case ERROR.INTERNAL:
     default:
       return '宿主内部错误：重试一次；仍失败时查看 DSH 日志。'
@@ -156,6 +163,37 @@ function consumeTarget(params, fallback = 'user') {
     throw handoffError(ERROR.INVALID_ARGS, `target must be one of ${TARGETS.join(', ')}`)
   }
   return value
+}
+
+/** Validate an optional boolean parameter. */
+function consumeBoolean(params, key, fallback = false) {
+  const value = params[key]
+  if (value === undefined) return fallback
+  if (typeof value !== 'boolean') throw handoffError(ERROR.INVALID_ARGS, `${key} must be a boolean`)
+  return value
+}
+
+/**
+ * Validate the optional `projectKey` delete locator.
+ *
+ * Only used to reach a historical batch under a moved project key: the value is
+ * shape-checked, refused for path separators/traversal by {@link normalizeProjectKey},
+ * and the directory must really exist under the selected handoff root.
+ *
+ * @param {Record<string, unknown>} params
+ * @param {{root: string, fs: any}} scope
+ * @returns {Promise<string|undefined>}
+ */
+async function consumeProjectKey(params, { root, fs }) {
+  if (params.projectKey === undefined) return undefined
+  const projectKey = normalizeProjectKey(params.projectKey)
+  if (fs !== null && fs !== undefined && typeof fs.lstat === 'function') {
+    const info = await fs.lstat(join(root, projectKey))
+    if (info === undefined || info === null || info.type !== 'directory') {
+      throw handoffError(ERROR.BATCH_NOT_FOUND, `project key directory not found under the handoff root: ${projectKey}`)
+    }
+  }
+  return projectKey
 }
 
 /** Build the `exec` face the service already consumes (agent + signal). */
@@ -233,6 +271,12 @@ function rootsOf(env, workspaceRoot) {
  * verification step and a "wait for the user's explicit instruction before
  * writing anything" boundary up front.
  *
+ * Re-grounding (P3/M5): a handoff narrative can be stale even when every hash
+ * verifies. After the read-only gate, the prompt therefore requires opening the
+ * files the package names, comparing the narrative with the current code, and
+ * reporting the files it checked plus any broken references — still read-only,
+ * still waiting for the user before any write.
+ *
  * @param {Record<string, any>} load service.load result.
  * @returns {string}
  */
@@ -270,9 +314,16 @@ export function renderOpeningPrompt(load) {
       '本包有漂移或警告（stale）：先按 findings 核实并把差异报告给用户；用户确认前不要依赖包内结论，也不要修改文件。'
     )
   }
-  lines.push('第 1 步（只读）：按顺序读 HANDOFF.md 的 H2 → H3 → H4 → H8。')
-  lines.push('第 2 步（只读）：在依赖任何 H4 断言前，至少重新核对 3 条（哈希/文件/命令输出）。')
-  lines.push('第 3 步：向用户汇报 trust、复核结果和建议的下一步；**等用户确认后再开始修改文件**。')
+  lines.push('第 1 步（只读）：按顺序读 HANDOFF.md 的 H2 → H3 → H4 → H8，先建立任务/架构/上次进展的概念。')
+  lines.push(
+    '第 2 步（只读）：实际打开并阅读 H4/文件清单里的关键文件——按 role 优先 entry/source/test/doc，最多 8 个；HANDOFF 引用的文档与配置也要打开。不要只核对哈希。'
+  )
+  lines.push(
+    '第 3 步（只读，re-grounding）：核对「HANDOFF 叙述 vs 当前代码/文件」。特别检查：HANDOFF 引用的仓库相对路径是否仍存在；被描述为“已实现/已完成”的关键行为是否与代码相符。发现「叙述与现状不符」或「引用已失效」时记录清单，报告而不是自行修复。'
+  )
+  lines.push(
+    '第 4 步：向用户汇报 trust、我实际核对过的文件列表、发现的「叙述与现状不符/引用已失效」清单和建议的下一步；**等用户确认后再开始修改文件**。'
+  )
   if (pointers.length > 0) {
     lines.push('', '包内指针：')
     for (const pointer of pointers) {
@@ -492,6 +543,37 @@ export function createUiRpc({ service, env = {}, ctx } = {}) {
   }
 
   /**
+   * `delete`: soft-delete one batch into the handoff recycle bin.
+   *
+   * This is a write method (explicit UI click + confirmation only). Only soft
+   * deletion is reachable from the UI: the batch directory moves under
+   * `<root>/.trash/<projectKey>/` and stays recoverable from the filesystem.
+   * A `projectKey` locator is accepted for a historical (moved-key) batch and is
+   * shape-checked plus directory-checked before the service is called.
+   */
+  async function deleteBatch(params, signal) {
+    const target = consumeTarget(params)
+    const { session, workspaceRoot } = resolveWorkspace(serviceCtx, consumeSessionId(params))
+    const exec = execForSession(session, signal)
+    const batchId = params.batchId
+    if (typeof batchId !== 'string' || !BATCH_ID_RE.test(batchId)) {
+      throw handoffError(ERROR.INVALID_ARGS, 'batchId must match YYYYMMDDTHHmmssZ-xxxx')
+    }
+    const roots = rootsOf(env, workspaceRoot)
+    const projectKey = await consumeProjectKey(params, {
+      root: target === 'workspace' ? roots.workspace : roots.user,
+      fs: serviceCtx?.fs
+    })
+    const force = consumeBoolean(params, 'force', false)
+    const args = validateToolArgs({ action: 'delete', target, batchId, ...(force ? { force: true } : {}) })
+    // Internal locator for a historical project key; not part of the tool
+    // contract (the tool always deletes from the current project key).
+    if (projectKey !== undefined) args.projectKey = projectKey
+    const result = await service.run(args, exec)
+    return { protocol: UI_RPC_PROTOCOL, target, ...result }
+  }
+
+  /**
    * Dispatch one validated request.
    * @param {string} method
    * @param {Record<string, unknown>} params
@@ -516,6 +598,8 @@ export function createUiRpc({ service, env = {}, ctx } = {}) {
         return await copy(raw, signal)
       case 'create':
         return await create(raw, signal)
+      case 'delete':
+        return await deleteBatch(raw, signal)
       default:
         throw handoffError(ERROR.INVALID_ARGS, `unsupported UI method: ${method}`)
     }

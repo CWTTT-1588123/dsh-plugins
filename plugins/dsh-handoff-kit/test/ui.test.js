@@ -353,6 +353,46 @@ test('opening prompt embeds a mandatory read-only gate before any work', () => {
   assert.match(prompt, /建议的下一步（仅供参考，仍需用户确认后再执行）/)
 })
 
+test('opening prompt requires re-grounding: read key files, compare narrative with code, report the file list', () => {
+  const prompt = renderOpeningPrompt({
+    batchId: '20261022T131930Z-6922',
+    displayDir: 'C:\\Users\\x\\.dsh\\handoff\\p\\b',
+    trust: 'verified',
+    pointers: [],
+    next: ['继续 P3'],
+    handoff: { path: 'HANDOFF.md', sections: [] }
+  })
+  const gateIndex = prompt.indexOf('第 0 步（强制，只读）')
+  const conceptsIndex = prompt.indexOf('第 1 步（只读）')
+  const filesIndex = prompt.indexOf('第 2 步（只读）')
+  const compareIndex = prompt.indexOf('第 3 步（只读，re-grounding）')
+  const reportIndex = prompt.indexOf('第 4 步')
+  assert.ok(gateIndex >= 0, 'read-only gate stays first')
+  assert.ok(conceptsIndex > gateIndex, 'concept reading follows the gate')
+  // 1. Read the package to form concepts (existing H2→H3→H4→H8 order kept).
+  assert.match(prompt, /H2 → H3 → H4 → H8/)
+  // 2. Actually open the files the package names (by role, bounded).
+  assert.ok(filesIndex > conceptsIndex, 'file reading follows concept reading')
+  assert.match(prompt, /实际打开并阅读 H4\/文件清单里的关键文件/)
+  assert.match(prompt, /entry\/source\/test\/doc/)
+  assert.match(prompt, /最多 8 个/)
+  assert.match(prompt, /不要只核对哈希/)
+  // 3. Compare the narrative with the current code/files, including broken refs.
+  assert.ok(compareIndex > filesIndex, 'comparison follows file reading')
+  assert.match(prompt, /HANDOFF 叙述 vs 当前代码\/文件/)
+  assert.match(prompt, /引用的仓库相对路径是否仍存在/)
+  assert.match(prompt, /已实现\/已完成/)
+  assert.match(prompt, /引用已失效/)
+  // 4. Report trust + the checked-file list + mismatches + next step, still read-only.
+  assert.ok(reportIndex > compareIndex, 'reporting follows re-grounding')
+  assert.match(prompt, /我实际核对过的文件列表/)
+  assert.match(prompt, /叙述与现状不符/)
+  assert.match(prompt, /等用户确认后再开始修改文件/)
+  // The read-only boundary and "report first, write nothing" reminder survive.
+  assert.match(prompt, /不要修改\/创建\/删除任何文件/)
+  assert.match(prompt, /在收到用户的明确指令前，请只汇报、不落盘/)
+})
+
 test('failureOf keeps the code, drops the duplicated prefix and attaches a remedy', () => {
   const failure = failureOf(handoffError(ERROR.WRITE_FAILED, 'disk full'))
   assert.equal(failure.ok, false)
@@ -467,4 +507,139 @@ test('create through the UI route runs the real service end to end (tool-path va
   assert.equal(state.value.batches.length, 1)
   assert.equal(state.value.batches[0].batchId, FIXED_BATCH_ID)
   assert.equal(fs.writeCount(), writesAfterCreate)
+})
+
+// --------------------------------------------------------------- UI delete
+
+test('delete is an exposed UI RPC method and forwards the canonical tool arguments', async () => {
+  const service = stubService({
+    run: async (args) => ({
+      action: 'delete',
+      ok: true,
+      batchId: args.batchId,
+      projectKey: 'fixture-12345678',
+      mode: 'trash',
+      trashDir: '$DSH_HOME/handoff/.trash/fixture-12345678/b-1',
+      warnings: []
+    })
+  })
+  const ctx = baseCtx()
+  const rpc = createUiRpc({ service, env: { DSH_HOME: ctx.dshHome }, ctx })
+  assert.equal(rpc.methods.includes('delete'), true)
+  const baseline = service.calls.run.length
+  const payload = await (
+    await rpc.handle(
+      rpcRequest('delete', {
+        sessionId: 'session-test',
+        target: 'user',
+        batchId: '20261022T023512Z-a1b2',
+        force: true
+      })
+    )
+  ).json()
+  assert.equal(payload.ok, true, JSON.stringify(payload.error))
+  assert.equal(payload.value.mode, 'trash')
+  assert.equal(service.calls.run.length, baseline + 1)
+  const forwarded = service.calls.run.at(-1).args
+  assert.deepEqual(
+    forwarded,
+    validateToolArgs({ action: 'delete', target: 'user', batchId: '20261022T023512Z-a1b2', force: true })
+  )
+  assert.equal(forwarded.projectKey, undefined)
+})
+
+test('UI delete validates batchId/projectKey/force and never forwards path traversal', async () => {
+  const ctx = baseCtx()
+  const service = stubService()
+  const rpc = createUiRpc({ service, env: { DSH_HOME: ctx.dshHome }, ctx })
+
+  const badBatch = await (await rpc.handle(rpcRequest('delete', { batchId: '../escape' }))).json()
+  assert.equal(badBatch.ok, false)
+  assert.equal(badBatch.error.code, ERROR.INVALID_ARGS)
+
+  for (const projectKey of ['../escape', 'a/b', '.trash', 'BAD KEY']) {
+    const payload = await (
+      await rpc.handle(
+        rpcRequest('delete', { batchId: '20261022T023512Z-a1b2', projectKey })
+      )
+    ).json()
+    assert.equal(payload.ok, false, projectKey)
+    assert.equal(payload.error.code, ERROR.INVALID_ARGS, projectKey)
+  }
+  // A well-shaped but absent project-key directory is refused too.
+  const absent = await (
+    await rpc.handle(
+      rpcRequest('delete', { batchId: '20261022T023512Z-a1b2', projectKey: 'no-such-11111111' })
+    )
+  ).json()
+  assert.equal(absent.ok, false)
+  assert.equal(absent.error.code, ERROR.BATCH_NOT_FOUND)
+
+  const badForce = await (
+    await rpc.handle(rpcRequest('delete', { batchId: '20261022T023512Z-a1b2', force: 'yes' }))
+  ).json()
+  assert.equal(badForce.ok, false)
+  assert.equal(badForce.error.code, ERROR.INVALID_ARGS)
+  assert.equal(service.calls.run.length, 0)
+})
+
+test('UI delete through the real service soft-deletes and refreshes the list', async () => {
+  const fs = createFixtureFs()
+  addGitFixture(fs)
+  const ctx = createFakeCtx({
+    fs,
+    mode: 'danger-full-access',
+    dshHome: DSH_HOME_TEST,
+    session: { id: 'session-test', cwd: WORKSPACE_ROOT, events: [] }
+  })
+  const service = createService({
+    ctx,
+    env: { DSH_HOME: DSH_HOME_TEST },
+    now: fixedClock,
+    randomSuffix: fixedRandom,
+    dshVersion: '0.2.1-rc.2',
+    platform: 'win32'
+  })
+  const rpc = createUiRpc({ service, env: { DSH_HOME: DSH_HOME_TEST }, ctx })
+
+  const created = await (
+    await rpc.handle(rpcRequest('create', { sessionId: 'session-test', title: 'delete me' }))
+  ).json()
+  assert.equal(created.ok, true, JSON.stringify(created.error))
+  const batchId = created.value.batchId
+
+  const deleted = await (
+    await rpc.handle(rpcRequest('delete', { sessionId: 'session-test', batchId }))
+  ).json()
+  assert.equal(deleted.ok, true, JSON.stringify(deleted.error))
+  assert.equal(deleted.value.action, 'delete')
+  assert.equal(deleted.value.batchId, batchId)
+  assert.equal(deleted.value.mode, 'trash')
+  assert.match(deleted.value.trashDir, /\/\.trash\/[^/]+\/20261022T023512Z-a1b2-20261022T023512Z$/)
+  assert.deepEqual(fs.mutationOps(), ['rename'])
+
+  const stateAfter = await (
+    await rpc.handle(rpcRequest('state', { sessionId: 'session-test' }))
+  ).json()
+  assert.equal(stateAfter.ok, true)
+  assert.equal(stateAfter.value.batches.length, 0)
+  // The historical fallback must not resurrect the trashed batch either.
+  assert.equal(stateAfter.value.history, null)
+})
+
+test('UI delete reports a lineage-referenced batch as an error envelope with a remedy', async () => {
+  const service = stubService({
+    run: async () => {
+      throw handoffError(ERROR.BATCH_REFERENCED, 'batch is referenced by newer batch')
+    }
+  })
+  const ctx = baseCtx()
+  const rpc = createUiRpc({ service, env: { DSH_HOME: ctx.dshHome }, ctx })
+  const payload = await (
+    await rpc.handle(rpcRequest('delete', { batchId: '20261022T023512Z-a1b2' }))
+  ).json()
+  assert.equal(payload.ok, false)
+  assert.equal(payload.error.code, ERROR.BATCH_REFERENCED)
+  assert.match(payload.error.remedy, /lineage/)
+  assert.match(payload.error.message, /referenced/)
 })

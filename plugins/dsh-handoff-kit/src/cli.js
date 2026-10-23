@@ -24,8 +24,11 @@ import {
   mkdirSync,
   readFileSync,
   readdirSync,
+  renameSync,
+  rmSync,
   writeFileSync
 } from 'node:fs'
+import { homedir } from 'node:os'
 import { basename, dirname, join, resolve } from 'node:path'
 
 import {
@@ -33,6 +36,7 @@ import {
   ERROR,
   EVIDENCE_DIR,
   HANDOFF_FILE,
+  HANDOFF_SUBDIR,
   MANIFEST_FILE,
   PLUGIN_VERSION,
   SCHEMA_VERSION,
@@ -59,6 +63,24 @@ import {
 import { normalizeArtifactPath, resolveInside, sha256Hex } from './paths.js'
 import { redactText, scanSecrets } from './redact.js'
 import { renderHandoff } from './render.js'
+import {
+  SIGNATURE_FILE,
+  TRUSTED_KEYS_FILE,
+  createSignatureEnvelope,
+  evaluateSignature,
+  parseTrustedKeys,
+  publicKeyEntry
+} from './signature.js'
+import { findMissingPathRefs } from './path-refs.js'
+import {
+  HARD_DELETE_WARNING,
+  REFERENCED_FORCE_WARNING,
+  describeReferrers,
+  findLineageReferrers,
+  parseBatchLocation,
+  trashEntryName,
+  trashTimestamp
+} from './delete.js'
 
 /** Exit codes shared with `spec/verify.md`. */
 export const EXIT = Object.freeze({ VERIFIED: 0, INVALID: 1, USAGE: 2, STALE: 3 })
@@ -75,11 +97,19 @@ const SECTION_MAX_CHARS = 1500
 const CLI_USAGE = `handoff-kit ${PLUGIN_VERSION} — deterministic handoff package CLI (zero dependencies)
 
 Usage:
-  handoff-kit verify <batchDir> [--workspace <dir>] [--json]
-  handoff-kit load   <batchDir> [--workspace <dir>] [--sections|--full] [--json]
+  handoff-kit verify <batchDir> [--workspace <dir>] [--pubkey <publicKey.pem>] [--json]
+  handoff-kit load   <batchDir> [--workspace <dir>] [--pubkey <publicKey.pem>] [--sections|--full] [--json]
   handoff-kit list   --root <handoffRoot> [--json]
   handoff-kit migrate <batchDir> --out <newBatchDir> [--json]
+  handoff-kit sign   <batchDir> --key <privateKey.pem> [--force] [--json]
+  handoff-kit delete <batchDir> [--hard] [--force] [--json]
   handoff-kit --help | --version
+
+Signature verification is opt-in: without --pubkey the read-only trusted-key list
+$DSH_HOME/handoff/trusted-keys.json is used; otherwise a valid signature is "untrusted".
+
+Delete moves the batch to <handoffRoot>/.trash/ by default (recoverable); --hard
+removes it permanently. A lineage-referenced batch is refused unless --force.
 
 Exit codes: 0 verified/ok, 3 stale, 1 invalid, 2 usage/IO error.`
 
@@ -161,6 +191,91 @@ function readManifestIfPossible(batchDir) {
       error,
       code: errorCodeOf(error) === ERROR.MANIFEST_INVALID ? 'MANIFEST_INVALID' : 'MANIFEST_MISSING'
     }
+  }
+}
+
+/* ──────────────────────── signature / audit receipt (P3/M5) ──────────────── */
+
+/** Resolve `$DSH_HOME` for the CLI (the CLI reads trusted keys from the same root). */
+function resolveDshHomeFromEnv(env = process.env) {
+  const configured = typeof env?.DSH_HOME === 'string' ? env.DSH_HOME.trim() : ''
+  if (configured !== '') return resolve(configured)
+  return join(homedir(), '.dsh')
+}
+
+/** Read a text file, or `undefined` when it does not exist / cannot be read. */
+function readTextIfPossible(absolutePath) {
+  try {
+    return readFileSync(absolutePath, 'utf8')
+  } catch {
+    return undefined
+  }
+}
+
+/** Read file bytes, or `undefined` when it does not exist / cannot be read. */
+function readBytesIfPossible(absolutePath) {
+  try {
+    return readFileSync(absolutePath)
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * Resolve the CLI trust source for one verify/load call.
+ *
+ * Priority (decision D7): explicit `--pubkey` file → read-only
+ * `$DSH_HOME/handoff/trusted-keys.json` → no trust source (valid signatures
+ * stay `untrusted`). An explicitly supplied but unreadable `--pubkey` is a
+ * usage error (exit 2), never a silent downgrade.
+ */
+function resolveCliTrustedKeys({ publicKeyPath }) {
+  if (publicKeyPath !== undefined) {
+    const text = readTextIfPossible(resolve(publicKeyPath))
+    if (text === undefined)
+      throw handoffError(ERROR.INVALID_ARGS, `--pubkey file cannot be read: ${resolve(publicKeyPath)}`)
+    return { keys: [publicKeyEntry(text)] }
+  }
+  const storePath = join(resolveDshHomeFromEnv(), HANDOFF_SUBDIR, TRUSTED_KEYS_FILE)
+  const storeText = readTextIfPossible(storePath)
+  if (storeText === undefined) return { keys: [] }
+  try {
+    return { keys: parseTrustedKeys(storeText) }
+  } catch (error) {
+    return { keys: [], detail: errorMessageOf(error) }
+  }
+}
+
+/** Evaluate `signature.json` of one batch against the CLI trust source. */
+function verifyBatchSignature({ batchDir, publicKeyPath }) {
+  const signatureText = readTextIfPossible(join(batchDir, SIGNATURE_FILE))
+  const trusted = resolveCliTrustedKeys({ publicKeyPath })
+  return evaluateSignature({
+    signatureText,
+    sumsBytes: readBytesIfPossible(join(batchDir, SUMS_FILE)),
+    trustedKeys: trusted.keys,
+    ...(typeof trusted.detail === 'string' ? { trustedKeysError: trusted.detail } : {})
+  })
+}
+
+/**
+ * Build the read-only audit receipt (D8): checker identity/version, check
+ * instant and sha256 hashes of the three input files (`null` when missing).
+ */
+function buildReceiptFor({ batchDir, checkedAt }) {
+  const inputs = { manifestSha256: null, sumsSha256: null, handoffSha256: null }
+  for (const [file, key] of [
+    [MANIFEST_FILE, 'manifestSha256'],
+    [SUMS_FILE, 'sumsSha256'],
+    [HANDOFF_FILE, 'handoffSha256']
+  ]) {
+    const bytes = readBytesIfPossible(join(batchDir, file))
+    if (bytes !== undefined) inputs[key] = sha256Hex(bytes)
+  }
+  return {
+    checker: { name: 'dsh-handoff-kit', version: PLUGIN_VERSION },
+    checkedAt,
+    inputs
   }
 }
 
@@ -373,11 +488,33 @@ async function finishDrift({ manifest, workspaceRoot, findings, artifactDigests 
 }
 
 /**
- * Verify one batch directory (read-only).
- * @param {{batchDir: string, workspaceRoot?: string}} input
- * @returns {Promise<{trust: string, verification: object, manifest: object|null, batchId: string}>}
+ * A2: warn when the HANDOFF narrative references workspace paths that no
+ * longer exist. Skipped (no findings) when `--workspace` was not supplied, so a
+ * cross-tool consumer without the workspace never gets false positives.
  */
-export async function verifyBatch({ batchDir, workspaceRoot }) {
+async function checkHandoffPathRefsForCli({ batchDir, workspaceRoot, findings }) {
+  if (typeof workspaceRoot !== 'string' || workspaceRoot === '') return
+  const text = readTextIfPossible(join(batchDir, HANDOFF_FILE))
+  if (text === undefined) return
+  const checked = await findMissingPathRefs({ text, workspaceRoot, io: createNodeIo() })
+  if (!checked.supported) return
+  for (const entry of checked.missing) {
+    findings.push({
+      severity: 'warn',
+      code: 'HANDOFF_PATH_MISSING',
+      path: entry.ref,
+      detail: `HANDOFF references a path that no longer exists: ${entry.ref}`
+    })
+  }
+}
+
+/**
+ * Verify one batch directory (read-only).
+ * @param {{batchDir: string, workspaceRoot?: string, publicKeyPath?: string}} input
+ * @returns {Promise<{trust: string, verification: object, manifest: object|null,
+ *   batchId: string, signature: object, receipt: object}>}
+ */
+export async function verifyBatch({ batchDir, workspaceRoot, publicKeyPath } = {}) {
   const absoluteDir = resolve(batchDir)
   const batchId = basename(absoluteDir)
   const findings = []
@@ -401,6 +538,21 @@ export async function verifyBatch({ batchDir, workspaceRoot }) {
     checkLineage({ manifest, batchDir: absoluteDir, findings })
     drift = await finishDrift({ manifest, workspaceRoot, findings, artifactDigests })
   }
+  // A2: narrative paths that no longer exist are warnings (trust becomes stale,
+  // never invalid). Only possible when the caller supplies the workspace;
+  // without it the check is skipped and the finding set is unchanged.
+  await checkHandoffPathRefsForCli({ batchDir: absoluteDir, workspaceRoot, findings })
+  // P3/M5/D7: only an invalid signature changes trust (error finding); unsigned
+  // and untrusted packages are informational and leave findings/counts untouched.
+  const signature = verifyBatchSignature({ batchDir: absoluteDir, publicKeyPath })
+  if (signature.status === 'invalid') {
+    findings.push({
+      severity: 'error',
+      code: 'SIGNATURE_INVALID',
+      path: SIGNATURE_FILE,
+      detail: signature.detail ?? 'signature.json does not verify against SHA256SUMS'
+    })
+  }
   const sorted = sortFindings(findings)
   const counts = {
     errors: sorted.filter((finding) => finding.severity === 'error').length,
@@ -415,16 +567,18 @@ export async function verifyBatch({ batchDir, workspaceRoot }) {
           drift.sourceFilesMissing > 0
         ? 'stale'
         : 'verified'
+  const checkedAt = new Date().toISOString()
+  const receipt = buildReceiptFor({ batchDir: absoluteDir, checkedAt })
   const verification = {
     ok: counts.errors === 0,
     batchId,
     dir: absoluteDir,
-    checkedAt: new Date().toISOString(),
+    checkedAt,
     findings: sorted,
     drift,
     counts
   }
-  return { trust, verification, manifest, batchId }
+  return { trust, verification, manifest, batchId, signature, receipt }
 }
 
 /* ───────────────────────────────── load ──────────────────────────────────── */
@@ -462,8 +616,8 @@ function extractSections(text) {
 /**
  * Verify and summarize one batch (read-only consumer view).
  */
-export async function loadBatch({ batchDir, workspaceRoot, include = 'summary' }) {
-  const verified = await verifyBatch({ batchDir, workspaceRoot })
+export async function loadBatch({ batchDir, workspaceRoot, include = 'summary', publicKeyPath } = {}) {
+  const verified = await verifyBatch({ batchDir, workspaceRoot, publicKeyPath })
   const dir = resolve(batchDir)
   const handoffPath = join(dir, HANDOFF_FILE)
   let handoff = { path: handoffPath }
@@ -484,6 +638,8 @@ export async function loadBatch({ batchDir, workspaceRoot, include = 'summary' }
     dir,
     trust: verified.trust,
     verification: verified.verification,
+    signature: verified.signature,
+    receipt: verified.receipt,
     handoff,
     manifest: {
       path: join(dir, MANIFEST_FILE),
@@ -557,7 +713,16 @@ function evidenceTextsForManifest(manifest) {
     { path: `${EVIDENCE_DIR}/git.json`, content: jsonText({ schemaVersion: SCHEMA_VERSION, generator: manifest.generator, git: manifest.git }) },
     { path: `${EVIDENCE_DIR}/files.json`, content: jsonText({ schemaVersion: SCHEMA_VERSION, scan: manifest.scan, files: manifest.files }) },
     { path: `${EVIDENCE_DIR}/session.json`, content: jsonText(manifest.sessionTrace) },
-    { path: `${EVIDENCE_DIR}/redactions.json`, content: jsonText({ schemaVersion: SCHEMA_VERSION, redactions: manifest.redactions }) }
+    {
+      path: `${EVIDENCE_DIR}/redactions.json`,
+      content: jsonText({
+        schemaVersion: SCHEMA_VERSION,
+        redactions: manifest.redactions,
+        // The out-of-harness CLI has no policy context, so migrations record the
+        // same explicit "no policy" provenance as an unpolicied plugin batch.
+        policy: { sha256: null, source: null }
+      })
+    }
   ]
 }
 
@@ -698,6 +863,175 @@ export async function migrateBatch({ batchDir, outDir, workspaceRoot }) {
   }
 }
 
+/* ───────────────────────────────── sign ──────────────────────────────────── */
+
+/**
+ * Sign one existing batch (opt-in, write-once).
+ *
+ * Writes exactly one file, `signature.json`, and never touches `SHA256SUMS` or
+ * any other artifact: the envelope signs the current `SHA256SUMS` bytes, so the
+ * batch's existing hash semantics are unchanged. The private key is read from
+ * the explicit `--key` path only and never echoed or persisted.
+ *
+ * @param {{batchDir: string, keyPath: string, force?: boolean}} input
+ * @returns {{batchDir: string, keyId: string, signedSha256: string}}
+ * @throws {Error & {code: string}} usage/IO (`HANDOFF_INVALID_ARGS` /
+ *   `HANDOFF_READ_FAILED` / `HANDOFF_WRITE_FAILED`), `HANDOFF_BATCH_EXISTS` when
+ *   a signature already exists and `force` is not set.
+ */
+export function signBatch({ batchDir, keyPath, force = false } = {}) {
+  if (typeof batchDir !== 'string' || batchDir === '')
+    throw handoffError(ERROR.INVALID_ARGS, 'sign requires <batchDir>')
+  if (typeof keyPath !== 'string' || keyPath === '')
+    throw handoffError(ERROR.INVALID_ARGS, 'sign requires --key <privateKey.pem>')
+  const absoluteDir = resolve(batchDir)
+  let dirStat
+  try {
+    dirStat = lstatSync(absoluteDir)
+  } catch {
+    dirStat = undefined
+  }
+  if (dirStat === undefined || !dirStat.isDirectory())
+    throw handoffError(ERROR.INVALID_ARGS, `batch directory not found: ${absoluteDir}`)
+  const sumsPath = join(absoluteDir, SUMS_FILE)
+  let sumsBytes
+  try {
+    sumsBytes = readFileSync(sumsPath)
+  } catch (error) {
+    throw handoffError(ERROR.READ_FAILED, `cannot read ${sumsPath}: ${errorMessageOf(error)}`)
+  }
+  const signaturePath = join(absoluteDir, SIGNATURE_FILE)
+  if (existsSync(signaturePath) && force !== true)
+    throw handoffError(
+      ERROR.BATCH_EXISTS,
+      `${SIGNATURE_FILE} already exists in ${absoluteDir}; pass --force to replace it`
+    )
+  const absoluteKeyPath = resolve(keyPath)
+  let privateKeyPem
+  try {
+    privateKeyPem = readFileSync(absoluteKeyPath, 'utf8')
+  } catch (error) {
+    throw handoffError(ERROR.READ_FAILED, `cannot read private key file ${absoluteKeyPath}: ${errorMessageOf(error)}`)
+  }
+  const envelope = createSignatureEnvelope({
+    sumsBytes,
+    privateKeyPem,
+    createdAt: new Date().toISOString()
+  })
+  try {
+    writeFileSync(signaturePath, `${JSON.stringify(envelope, null, 2)}\n`, 'utf8')
+  } catch (error) {
+    throw handoffError(ERROR.WRITE_FAILED, `cannot write ${signaturePath}: ${errorMessageOf(error)}`)
+  }
+  return {
+    batchDir: absoluteDir,
+    keyId: envelope.keyId,
+    signedSha256: envelope.signedSha256
+  }
+}
+
+/* ──────────────────────────────── delete ─────────────────────────────────── */
+
+/**
+ * Delete one batch (P3/M5b).
+ *
+ * Soft delete (default) moves the directory to
+ * `<handoffRoot>/.trash/<projectKey>/<batchId>-<YYYYMMDDTHHmmssZ>` and stays
+ * recoverable; `hard=true` removes it permanently. A batch referenced by
+ * another batch's lineage is refused unless `force` is set.
+ *
+ * @param {{batchDir: string, hard?: boolean, force?: boolean}} input
+ * @returns {Promise<{batchId: string, projectKey: string, mode: 'trash'|'hard',
+ *   dir: string, trashDir?: string, warnings: Array<{code: string, detail: string}>}>}
+ * @throws {Error & {code: string}} `HANDOFF_INVALID_ARGS` for a malformed batch
+ *   path, `HANDOFF_BATCH_REFERENCED` for a referenced batch without force,
+ *   `HANDOFF_BATCH_NOT_FOUND` / `HANDOFF_WRITE_FAILED` for IO failures.
+ */
+export async function deleteBatch({ batchDir, hard = false, force = false } = {}) {
+  const located = parseBatchLocation(batchDir)
+  let stat
+  try {
+    stat = lstatSync(located.dir)
+  } catch {
+    stat = undefined
+  }
+  if (stat === undefined || !stat.isDirectory())
+    throw handoffError(ERROR.BATCH_NOT_FOUND, `batch directory not found: ${located.dir}`)
+  const io = createNodeIo()
+  const referrers = await findLineageReferrers({
+    io,
+    root: located.root,
+    projectKey: located.projectKey,
+    batchId: located.batchId
+  })
+  const warnings = []
+  if (referrers.length > 0) {
+    if (force !== true) {
+      throw handoffError(
+        ERROR.BATCH_REFERENCED,
+        `batch ${located.batchId} is referenced by other batches (${describeReferrers(referrers)}); ` +
+          'delete the newer batch(es) first or pass --force'
+      )
+    }
+    warnings.push({
+      code: REFERENCED_FORCE_WARNING,
+      detail:
+        `deleted batch ${located.batchId} is still referenced by ${describeReferrers(referrers)}; ` +
+        'those batches will now report a LINEAGE_BROKEN finding'
+    })
+  }
+
+  if (hard === true) {
+    try {
+      rmSync(located.dir, { recursive: true, force: false })
+    } catch (error) {
+      throw handoffError(ERROR.WRITE_FAILED, `cannot permanently delete ${located.dir}: ${errorMessageOf(error)}`)
+    }
+    warnings.push({
+      code: HARD_DELETE_WARNING,
+      detail: `batch ${located.batchId} was deleted permanently; the files cannot be recovered`
+    })
+    return {
+      batchId: located.batchId,
+      projectKey: located.projectKey,
+      mode: 'hard',
+      dir: located.dir,
+      warnings: mergeWarningsCli(warnings)
+    }
+  }
+
+  const timestamp = trashTimestamp(new Date())
+  let trashDir
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const candidate = join(
+      located.root,
+      '.trash',
+      located.projectKey,
+      trashEntryName({ batchId: located.batchId, timestamp, attempt })
+    )
+    if (!existsSync(candidate)) {
+      trashDir = candidate
+      break
+    }
+  }
+  if (trashDir === undefined)
+    throw handoffError(ERROR.WRITE_FAILED, `cannot allocate a recycle-bin directory for ${located.batchId}`)
+  try {
+    mkdirSync(dirname(trashDir), { recursive: true })
+    renameSync(located.dir, trashDir)
+  } catch (error) {
+    throw handoffError(ERROR.WRITE_FAILED, `cannot move ${located.dir} to ${trashDir}: ${errorMessageOf(error)}`)
+  }
+  return {
+    batchId: located.batchId,
+    projectKey: located.projectKey,
+    mode: 'trash',
+    dir: located.dir,
+    trashDir,
+    warnings: mergeWarningsCli(warnings)
+  }
+}
+
 /** Merge/deduplicate/sort warning records (same rule as the plugin service). */
 function mergeWarningsCli(warnings) {
   const seen = new Set()
@@ -723,12 +1057,22 @@ function mergeWarningsCli(warnings) {
 
 /** Parse CLI argv into `{command, positional, flags}`. */
 export function parseArgv(argv) {
-  const flags = { json: false, help: false, version: false, sections: false, full: false }
+  const flags = {
+    json: false,
+    help: false,
+    version: false,
+    sections: false,
+    full: false,
+    force: false,
+    hard: false
+  }
   const positional = []
   const valued = new Map([
     ['--workspace', 'workspace'],
     ['--out', 'out'],
-    ['--root', 'root']
+    ['--root', 'root'],
+    ['--key', 'key'],
+    ['--pubkey', 'pubkey']
   ])
   for (let index = 0; index < argv.length; index += 1) {
     const token = argv[index]
@@ -737,6 +1081,8 @@ export function parseArgv(argv) {
     else if (token === '--version' || token === '-v') flags.version = true
     else if (token === '--sections') flags.sections = true
     else if (token === '--full') flags.full = true
+    else if (token === '--force') flags.force = true
+    else if (token === '--hard') flags.hard = true
     else if (valued.has(token)) {
       const value = argv[index + 1]
       if (value === undefined || value.startsWith('--')) throw handoffError(ERROR.INVALID_ARGS, `${token} requires a value`)
@@ -752,7 +1098,7 @@ export function parseArgv(argv) {
   return { command, positional, flags }
 }
 
-const COMMANDS = new Set(['verify', 'load', 'list', 'migrate'])
+const COMMANDS = new Set(['verify', 'load', 'list', 'migrate', 'sign', 'delete'])
 
 function assertNoExtra(positional) {
   if (positional.length > 0) throw handoffError(ERROR.INVALID_ARGS, `unexpected argument: ${positional.join(' ')}`)
@@ -769,7 +1115,15 @@ function assertBatchDir(positional, command) {
 
 function printVerify(result, flags, io) {
   if (flags.json) {
-    io.stdout.write(jsonText({ ok: result.trust !== 'invalid', batchId: result.batchId, dir: result.verification.dir, trust: result.trust, verification: result.verification }))
+    io.stdout.write(jsonText({
+      ok: result.trust !== 'invalid',
+      batchId: result.batchId,
+      dir: result.verification.dir,
+      trust: result.trust,
+      verification: result.verification,
+      signature: result.signature,
+      receipt: result.receipt
+    }))
     return
   }
   const { verification } = result
@@ -786,7 +1140,7 @@ function printVerify(result, flags, io) {
 
 function printLoad(result, flags, io) {
   if (flags.json) {
-    io.stdout.write(jsonText({ ok: result.trust !== 'invalid', batchId: result.batchId, dir: result.dir, trust: result.trust, verification: result.verification, handoff: result.handoff, manifest: result.manifest, pointers: result.pointers }))
+    io.stdout.write(jsonText({ ok: result.trust !== 'invalid', batchId: result.batchId, dir: result.dir, trust: result.trust, verification: result.verification, signature: result.signature, receipt: result.receipt, handoff: result.handoff, manifest: result.manifest, pointers: result.pointers }))
     return
   }
   io.stdout.write(`load ${result.batchId}: trust=${result.trust} (${result.verification.counts.errors} errors, ${result.verification.counts.warnings} warnings)\n`)
@@ -815,6 +1169,46 @@ function printMigrate(result, flags, io) {
   io.stdout.write(`dir: ${result.dir}\nsource (unchanged): ${result.sourceDir}\n`)
 }
 
+function printSign(result, flags, io) {
+  if (flags.json) {
+    io.stdout.write(jsonText({
+      ok: true,
+      batchDir: result.batchDir,
+      keyId: result.keyId,
+      signedSha256: result.signedSha256
+    }))
+    return
+  }
+  io.stdout.write(`signed ${result.batchDir}\n`)
+  io.stdout.write(`keyId: ${result.keyId}\n`)
+  io.stdout.write(`signedSha256 (SHA256SUMS): ${result.signedSha256}\n`)
+}
+
+function printDelete(result, flags, io) {
+  const warnings = Array.isArray(result.warnings) ? result.warnings : []
+  if (flags.json) {
+    io.stdout.write(jsonText({
+      ok: true,
+      batchId: result.batchId,
+      projectKey: result.projectKey,
+      mode: result.mode,
+      ...(typeof result.trashDir === 'string' ? { trashDir: result.trashDir } : {}),
+      ...(warnings.length > 0 ? { warnings } : {})
+    }))
+    return
+  }
+  if (result.mode === 'hard') {
+    io.stdout.write(`PERMANENTLY DELETED ${result.batchId} (project ${result.projectKey}); this cannot be undone\n`)
+    io.stdout.write(`dir: ${result.dir}\n`)
+  } else {
+    io.stdout.write(`moved ${result.batchId} (project ${result.projectKey}) to the recycle bin\n`)
+    io.stdout.write(`trash dir: ${result.trashDir}\n`)
+    io.stdout.write(`original dir (now gone): ${result.dir}\n`)
+    io.stdout.write('restore by moving the trash directory back under its project key\n')
+  }
+  for (const warning of warnings) io.stdout.write(`WARN ${warning.code}: ${warning.detail}\n`)
+}
+
 function exitCodeForTrust(trust) {
   if (trust === 'verified') return EXIT.VERIFIED
   if (trust === 'stale') return EXIT.STALE
@@ -832,9 +1226,11 @@ export async function runCli(argv, io = {}) {
   const stderr = io.stderr ?? process.stderr
   const output = { stdout, stderr }
   let flags = { json: false }
+  let command = null
   try {
     const parsed = parseArgv(argv)
     flags = parsed.flags
+    command = parsed.command
     if (flags.version) {
       stdout.write(`${PLUGIN_VERSION}\n`)
       return EXIT.VERIFIED
@@ -844,7 +1240,10 @@ export async function runCli(argv, io = {}) {
       return flags.help ? EXIT.VERIFIED : EXIT.USAGE
     }
     if (!COMMANDS.has(parsed.command)) {
-      throw handoffError(ERROR.INVALID_ARGS, `unknown command "${parsed.command}"; expected verify/load/list/migrate`)
+      throw handoffError(
+        ERROR.INVALID_ARGS,
+        `unknown command "${parsed.command}"; expected verify/load/list/migrate/sign/delete`
+      )
     }
     if (flags.sections && flags.full) {
       throw handoffError(ERROR.INVALID_ARGS, '--sections and --full are mutually exclusive')
@@ -857,14 +1256,14 @@ export async function runCli(argv, io = {}) {
     }
     if (parsed.command === 'verify') {
       const batchDir = assertBatchDirExists(assertBatchDir(parsed.positional, 'verify'))
-      const result = await verifyBatch({ batchDir, workspaceRoot: flags.workspace })
+      const result = await verifyBatch({ batchDir, workspaceRoot: flags.workspace, publicKeyPath: flags.pubkey })
       printVerify(result, flags, output)
       return exitCodeForTrust(result.trust)
     }
     if (parsed.command === 'load') {
       const batchDir = assertBatchDirExists(assertBatchDir(parsed.positional, 'load'))
       const include = flags.full ? 'full' : flags.sections ? 'sections' : 'summary'
-      const result = await loadBatch({ batchDir, workspaceRoot: flags.workspace, include })
+      const result = await loadBatch({ batchDir, workspaceRoot: flags.workspace, include, publicKeyPath: flags.pubkey })
       printLoad(result, flags, output)
       return exitCodeForTrust(result.trust)
     }
@@ -872,6 +1271,23 @@ export async function runCli(argv, io = {}) {
       assertNoExtra(parsed.positional)
       if (typeof flags.root !== 'string') throw handoffError(ERROR.INVALID_ARGS, 'list requires --root <handoffRoot>')
       printList(listBatches({ root: flags.root }), flags, output)
+      return EXIT.VERIFIED
+    }
+    if (parsed.command === 'sign') {
+      const batchDir = assertBatchDirExists(assertBatchDir(parsed.positional, 'sign'))
+      if (typeof flags.key !== 'string') throw handoffError(ERROR.INVALID_ARGS, 'sign requires --key <privateKey.pem>')
+      const result = signBatch({ batchDir, keyPath: flags.key, force: flags.force === true })
+      printSign(result, flags, output)
+      return EXIT.VERIFIED
+    }
+    if (parsed.command === 'delete') {
+      const batchDir = assertBatchDirExists(assertBatchDir(parsed.positional, 'delete'))
+      const result = await deleteBatch({
+        batchDir,
+        hard: flags.hard === true,
+        force: flags.force === true
+      })
+      printDelete(result, flags, output)
       return EXIT.VERIFIED
     }
     // migrate
@@ -883,7 +1299,12 @@ export async function runCli(argv, io = {}) {
   } catch (error) {
     const code = errorCodeOf(error)
     const usage = code === ERROR.INVALID_ARGS || code === ERROR.INTERNAL
-    const exitCode = usage ? EXIT.USAGE : EXIT.INVALID
+    // `sign`/`delete` promise 1 = refusal (existing signature / referenced
+    // batch), 2 = usage OR IO (spec/verify.md).
+    const signIo = command === 'sign' && (code === ERROR.READ_FAILED || code === ERROR.WRITE_FAILED)
+    const deleteIo =
+      command === 'delete' && (code === ERROR.READ_FAILED || code === ERROR.WRITE_FAILED)
+    const exitCode = usage || signIo || deleteIo ? EXIT.USAGE : EXIT.INVALID
     if (flags.json) {
       stdout.write(jsonText({ ok: false, error: { code, message: errorMessageOf(error) } }))
     } else {

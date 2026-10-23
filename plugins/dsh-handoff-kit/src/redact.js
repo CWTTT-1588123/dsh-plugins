@@ -203,6 +203,31 @@ function requireText(text, functionName) {
 }
 
 /**
+ * Normalize a caller-supplied array of appended redaction rules.
+ *
+ * Appended rules (P3/M5 policy rules) always run AFTER the built-ins, in the
+ * order provided, and can never remove or reorder a built-in rule.
+ * @param {readonly {kind: string, pattern: RegExp, replacement?: string}[]|undefined} extraRules
+ * @returns {readonly {kind: string, pattern: RegExp, replacement?: string}[]}
+ */
+function resolveRuleSet(extraRules) {
+  if (extraRules === undefined || extraRules === null) return REDACTION_RULES
+  if (!Array.isArray(extraRules)) throw misuse('extra redaction rules must be an array')
+  if (extraRules.length === 0) return REDACTION_RULES
+  for (const rule of extraRules) {
+    if (
+      rule === null ||
+      typeof rule !== 'object' ||
+      typeof rule.kind !== 'string' ||
+      rule.kind === '' ||
+      !(rule.pattern instanceof RegExp)
+    )
+      throw misuse('each extra redaction rule needs a kind and a RegExp pattern')
+  }
+  return [...REDACTION_RULES, ...extraRules]
+}
+
+/**
  * Redact every known secret in `text`.
  *
  * A rule hit is replaced with `«REDACTED:<kind>»`; `hits` reports only rules
@@ -210,14 +235,17 @@ function requireText(text, functionName) {
  * deterministic: redacting an already redacted text returns that text unchanged
  * with `hits: []`.
  * @param {string} text input text (UTF-8 string).
+ * @param {readonly {kind: string, pattern: RegExp, replacement?: string}[]} [extraRules]
+ *   policy-appended rules, applied after the built-ins (never instead of them).
  * @returns {{text: string, hits: Array<{kind: string, count: number}>}}
  * @throws {Error & {code: string}} `HANDOFF_INTERNAL` when `text` is not a string.
  */
-export function redactText(text) {
+export function redactText(text, extraRules) {
   requireText(text, 'redactText')
+  const rules = resolveRuleSet(extraRules)
   const counts = new Map()
   let current = text
-  for (const rule of REDACTION_RULES) {
+  for (const rule of rules) {
     const result = applyRule(current, rule)
     current = result.text
     if (result.count > 0) counts.set(rule.kind, (counts.get(rule.kind) ?? 0) + result.count)
@@ -234,12 +262,14 @@ export function redactText(text) {
  * and a generic rule). A clean text — including already redacted text — yields
  * an empty array.
  * @param {string} text input text.
+ * @param {readonly {kind: string, pattern: RegExp, replacement?: string}[]} [extraRules]
+ *   policy-appended rules (applied after the built-ins).
  * @returns {Array<{kind: string, count: number}>} only non-zero hits, sorted by kind.
  * @throws {Error & {code: string}} `HANDOFF_INTERNAL` when `text` is not a string.
  */
-export function scanSecrets(text) {
+export function scanSecrets(text, extraRules) {
   requireText(text, 'scanSecrets')
-  return redactText(text).hits
+  return redactText(text, extraRules).hits
 }
 
 /**
@@ -248,11 +278,13 @@ export function scanSecrets(text) {
  * a non-empty array must be mapped by the caller to
  * `HANDOFF_SECRET_CHECK_FAILED` and the whole batch must not be written.
  * @param {string} text artifact text about to be written.
+ * @param {readonly {kind: string, pattern: RegExp, replacement?: string}[]} [extraRules]
+ *   policy-appended rules (applied after the built-ins).
  * @returns {Array<{kind: string, count: number}>} only non-zero hits, sorted by kind.
  * @throws {Error & {code: string}} `HANDOFF_INTERNAL` when `text` is not a string.
  */
-export function finalCheck(text) {
-  return scanSecrets(text)
+export function finalCheck(text, extraRules) {
+  return scanSecrets(text, extraRules)
 }
 
 /**
@@ -263,14 +295,16 @@ export function finalCheck(text) {
  * Object keys are structural and are not redacted. Any other value (number,
  * boolean, null, Date, Buffer, class instance, …) is returned as-is.
  * @param {unknown} value arbitrary JSON-ish value.
+ * @param {readonly {kind: string, pattern: RegExp, replacement?: string}[]} [extraRules]
+ *   policy-appended rules (applied after the built-ins).
  * @returns {{value: unknown, hits: Array<{kind: string, count: number}>}}
  *   a structurally cloned value plus aggregated hits sorted by kind.
  */
-export function redactDeep(value) {
+export function redactDeep(value, extraRules) {
   const counts = new Map()
   const walk = (node) => {
     if (typeof node === 'string') {
-      const result = redactText(node)
+      const result = redactText(node, extraRules)
       for (const hit of result.hits) counts.set(hit.kind, (counts.get(hit.kind) ?? 0) + hit.count)
       return result.text
     }

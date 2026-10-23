@@ -14,9 +14,9 @@ import { LIMITS } from './contracts.js'
 import { redactText } from './redact.js'
 
 /** Clip a free-text field through the redactor and the fuel text bound. */
-export function clipFuelText(value, maxChars = LIMITS.fuelTextChars) {
+export function clipFuelText(value, maxChars = LIMITS.fuelTextChars, redactionRules) {
   if (typeof value !== 'string' || value === '') return ''
-  const redacted = redactText(value).text
+  const redacted = redactText(value, redactionRules).text
   return redacted.length > maxChars ? `${redacted.slice(0, maxChars)}…` : redacted
 }
 
@@ -30,15 +30,16 @@ function integerOr(value, fallback) {
  * `available` describes whether the goals service could answer for this agent;
  * a live service with no current goal is `available:true` and a `note`, not an
  * unavailable service. `goal` is present only when a goal view exists.
- * @param {{goal: object|null|undefined, available?: boolean, note?: string}} input
+ * @param {{goal: object|null|undefined, available?: boolean, note?: string,
+ *   redactionRules?: ReadonlyArray<{kind: string, pattern: RegExp, replacement?: string}>}} input
  */
-export function buildGoalFuel({ goal, available = true, note } = {}) {
+export function buildGoalFuel({ goal, available = true, note, redactionRules } = {}) {
   const block = { available: available === true }
   if (goal !== null && typeof goal === 'object') {
     block.available = true
     block.goal = {
       id: typeof goal.id === 'string' ? goal.id : '',
-      objective: clipFuelText(goal.objective),
+      objective: clipFuelText(goal.objective, LIMITS.fuelTextChars, redactionRules),
       phase: typeof goal.phase === 'string' ? goal.phase : '',
       roundsStarted: integerOr(goal.roundsStarted, 0),
       maxGoalRounds: integerOr(goal.maxGoalRounds, 0),
@@ -58,9 +59,10 @@ export function buildGoalFuel({ goal, available = true, note } = {}) {
 
 /**
  * Normalize `ctx.jobs.list(caller)` into the manifest fuel jobs block.
- * @param {{jobs: unknown[]|null|undefined, sessionId?: string|null, limits?: typeof LIMITS, note?: string}} input
+ * @param {{jobs: unknown[]|null|undefined, sessionId?: string|null, limits?: typeof LIMITS,
+ *   note?: string, redactionRules?: ReadonlyArray<{kind: string, pattern: RegExp, replacement?: string}>}} input
  */
-export function buildJobsFuel({ jobs, sessionId, limits = LIMITS, note } = {}) {
+export function buildJobsFuel({ jobs, sessionId, limits = LIMITS, note, redactionRules } = {}) {
   if (!Array.isArray(jobs)) {
     const block = { available: false, count: 0, statusCounts: {}, items: [] }
     block.note = typeof note === 'string' && note !== '' ? note : 'jobs service is unavailable'
@@ -82,13 +84,14 @@ export function buildJobsFuel({ jobs, sessionId, limits = LIMITS, note } = {}) {
     const item = {
       id: typeof job.id === 'string' ? job.id : '',
       kind: typeof job.kind === 'string' ? job.kind : '',
-      label: clipFuelText(job.label),
+      label: clipFuelText(job.label, LIMITS.fuelTextChars, redactionRules),
       status: typeof job.status === 'string' ? job.status : 'unknown',
       startedAt: integerOr(job.startedAt, 0)
     }
     if (Number.isInteger(job.finishedAt)) item.finishedAt = job.finishedAt
     const progress = typeof job.progress === 'string' ? job.progress : job.detail
-    if (typeof progress === 'string' && progress !== '') item.progress = clipFuelText(progress)
+    if (typeof progress === 'string' && progress !== '')
+      item.progress = clipFuelText(progress, LIMITS.fuelTextChars, redactionRules)
     return item
   })
   const block = {
@@ -104,9 +107,18 @@ export function buildJobsFuel({ jobs, sessionId, limits = LIMITS, note } = {}) {
 }
 
 /** Assemble the manifest fuel block from the two optional service reads. */
-export function buildFuel({ goal, jobs, sessionId, limits = LIMITS, goalAvailable, goalNote, jobsNote } = {}) {
+export function buildFuel({
+  goal,
+  jobs,
+  sessionId,
+  limits = LIMITS,
+  goalAvailable,
+  goalNote,
+  jobsNote,
+  redactionRules
+} = {}) {
   return {
-    goals: buildGoalFuel({ goal, available: goalAvailable, note: goalNote }),
-    jobs: buildJobsFuel({ jobs, sessionId, limits, note: jobsNote })
+    goals: buildGoalFuel({ goal, available: goalAvailable, note: goalNote, redactionRules }),
+    jobs: buildJobsFuel({ jobs, sessionId, limits, note: jobsNote, redactionRules })
   }
 }

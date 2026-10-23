@@ -111,6 +111,8 @@ window.__ModuleLoader__.load({
       "remedy.HANDOFF_WRITE_FAILED": "The Host failed to read or write: check directory permissions and disk space, then retry.",
       "remedy.HANDOFF_READ_FAILED": "The Host failed to read or write: check directory permissions and disk space, then retry.",
       "remedy.HANDOFF_SECRET_CHECK_FAILED": "Possible secret content was detected: clean it up and create the package again.",
+      "remedy.HANDOFF_POLICY_INVALID": "The redaction policy is invalid ($DSH_HOME/handoff/policy.json): nothing was written (fail-closed); fix or remove that file and retry.",
+      "remedy.HANDOFF_BATCH_REFERENCED": "This batch is still referenced by another batch lineage: delete the newer descendant batch(es) first, or use force explicitly (their LINEAGE_BROKEN finding follows).",
       "remedy.HANDOFF_INVALID_ARGS": "Invalid arguments: check the form and retry.",
       "remedy.HANDOFF_INTERNAL": "Host internal error: retry once; if it still fails, check the DSH logs.",
       "tab.create": "Create",
@@ -146,6 +148,17 @@ window.__ModuleLoader__.load({
       "field.verifiedAt": "Verified at",
       "list.separator": ", ",
       "batchlist.untitled": "(untitled)",
+      "batchlist.delete": "Delete",
+      "batchlist.deleteTitle": "Delete this batch",
+      "delete.title": "Delete handoff batch",
+      "delete.subtitle": "Soft delete: the batch moves to the recycle bin and can be restored from the filesystem.",
+      "delete.confirmBody": "Move batch {batchId} to the recycle bin? list / verify / load will no longer see it, but the files stay on disk under .trash/.",
+      "delete.projectKeyLabel": "Project key",
+      "delete.recycleBinLabel": "Recycle bin",
+      "delete.softOnly": "This UI only soft-deletes; permanent deletion is available only through the CLI (--hard).",
+      "delete.confirm": "Move to recycle bin",
+      "delete.busy": "Deleting…",
+      "delete.success": "Batch moved to the recycle bin",
       "prompt.heading": "New-session opening prompt",
       "prompt.trustBadge": "trust={trust}",
       "detail.loading": "Verifying: reading the package and re-checking hashes and drift…",
@@ -262,6 +275,8 @@ window.__ModuleLoader__.load({
       "remedy.HANDOFF_WRITE_FAILED": "宿主读写失败：检查目录权限与磁盘空间后重试。",
       "remedy.HANDOFF_READ_FAILED": "宿主读写失败：检查目录权限与磁盘空间后重试。",
       "remedy.HANDOFF_SECRET_CHECK_FAILED": "检测到疑似密钥内容：清理后重新生成。",
+      "remedy.HANDOFF_POLICY_INVALID": "脱敏策略配置无效（$DSH_HOME/handoff/policy.json）：已按 fail-closed 拒绝生成，请修正或删除该文件后重试。",
+      "remedy.HANDOFF_BATCH_REFERENCED": "该批次仍被其它批次的 lineage 引用：先删除更新的后代批次，或显式 force（会让后代出现 LINEAGE_BROKEN）。",
       "remedy.HANDOFF_INVALID_ARGS": "参数不合法：检查表单内容后重试。",
       "remedy.HANDOFF_INTERNAL": "宿主内部错误：重试一次；仍失败时查看 DSH 日志。",
       "tab.create": "生成",
@@ -297,6 +312,17 @@ window.__ModuleLoader__.load({
       "field.verifiedAt": "校验于",
       "list.separator": "；",
       "batchlist.untitled": "（无标题）",
+      "batchlist.delete": "删除",
+      "batchlist.deleteTitle": "删除该批次",
+      "delete.title": "删除交接批次",
+      "delete.subtitle": "软删除：批次移入回收站，仍可从文件系统恢复。",
+      "delete.confirmBody": "将批次 {batchId} 移入回收站？list / verify / load 将不再看到它，但文件仍保留在 .trash/ 下。",
+      "delete.projectKeyLabel": "项目 key",
+      "delete.recycleBinLabel": "回收站",
+      "delete.softOnly": "本界面只做软删除；永久删除仅可通过 CLI（--hard）。",
+      "delete.confirm": "移入回收站",
+      "delete.busy": "删除中…",
+      "delete.success": "批次已移入回收站",
       "prompt.heading": "新会话开场提示词",
       "prompt.trustBadge": "trust={trust}",
       "detail.loading": "正在校验：读包 + 重算哈希与漂移…",
@@ -516,6 +542,10 @@ window.__ModuleLoader__.load({
       detail: null,
       detailLoading: false,
       detailError: null,
+      // delete (soft delete into the recycle bin; Host RPC `delete`)
+      deleteTarget: null,
+      deleteBusy: false,
+      deleteError: null,
       // continue (append/update) from the workbench
       continueOpen: false,
       continueMode: 'append',
@@ -877,6 +907,58 @@ window.__ModuleLoader__.load({
       }
     }
 
+    // ------------------------------------------------- delete (soft delete)
+    /**
+     * Open the delete confirmation for one batch. The dialog is the second
+     * confirmation step; nothing is written until the user clicks confirm.
+     */
+    function requestDelete(batch) {
+      if (batch === null || typeof batch !== 'object' || typeof batch.batchId !== 'string' || batch.batchId === '')
+        return
+      set({ deleteTarget: batch, deleteBusy: false, deleteError: null })
+    }
+
+    /** Close the delete confirmation without writing anything. */
+    function closeDelete() {
+      set({ deleteTarget: null, deleteBusy: false, deleteError: null })
+    }
+
+    /**
+     * Soft-delete the selected batch through the Host RPC.
+     *
+     * Only `mode: 'trash'` is reachable here: the Host moves the directory into
+     * `<handoffRoot>/.trash/` and it stays recoverable from the filesystem.
+     * A lineage-referenced batch is refused by the Host and shown as an error
+     * toast (the UI never forces a lineage break).
+     */
+    async function performDelete() {
+      const target = store.deleteTarget
+      if (target === null || typeof target !== 'object' || store.deleteBusy) return null
+      const batchId = typeof target.batchId === 'string' ? target.batchId : ''
+      if (batchId === '') return null
+      const params = Object.assign({ target: store.target || 'user', batchId }, sessionParams())
+      if (typeof target.projectKey === 'string' && target.projectKey !== '') {
+        // Historical (moved-key) batch: the Host validates the key and locates
+        // the batch read/write under that exact directory.
+        params.projectKey = target.projectKey
+      }
+      set({ deleteBusy: true, deleteError: null })
+      try {
+        const result = await callHost('delete', params)
+        set({ deleteBusy: false, deleteTarget: null })
+        showToast(t('delete.success'))
+        if (store.detailBatchId === batchId) set({ detailBatchId: '', detail: null, detailError: null })
+        if (store.selectedBatchId === batchId) set({ selectedBatchId: null })
+        await refreshState({})
+        return result
+      } catch (error) {
+        set({ deleteBusy: false, deleteError: error })
+        const described = describeError(error)
+        showToast(described.message || described.code || t('error.hostRequestFailed'))
+        return null
+      }
+    }
+
     /** Put the opening prompt into the composer draft (no clipboard needed). */
     async function insertPrompt(batchId) {
       try {
@@ -1000,7 +1082,13 @@ window.__ModuleLoader__.load({
         padding: '0 12px',
         borderRadius: 7,
         border: `1px solid ${primary ? 'transparent' : T.border1}`,
-        background: primary ? T.brand : hover && !disabled ? T.layer2 : 'transparent',
+        background: primary
+          ? props.danger === true
+            ? T.error
+            : T.brand
+          : hover && !disabled
+            ? T.layer2
+            : 'transparent',
         color: primary ? '#ffffff' : props.danger === true ? T.error : T.text,
         fontFamily: FONT,
         fontSize: 12.5,
@@ -1797,38 +1885,70 @@ window.__ModuleLoader__.load({
         state.history !== undefined &&
         state.history.active === true
       const groups = historyActive ? groupBatchesByProject(batches) : [{ projectKey: '', batches }]
-      const batchButton = (batch) =>
+      const batchRow = (batch) =>
         h(
-          'button',
+          'div',
           {
             key: batch.batchId,
-            type: 'button',
-            onClick: () => void performDetail(batch.batchId),
             style: {
-              display: 'block',
-              width: '100%',
-              textAlign: 'left',
-              border: 'none',
+              display: 'flex',
+              alignItems: 'stretch',
               borderLeft: `3px solid ${batch.batchId === store.detailBatchId ? T.brand : 'transparent'}`,
-              background: batch.batchId === store.detailBatchId ? T.layer1 : 'transparent',
-              padding: '7px 10px',
-              cursor: 'pointer'
+              background: batch.batchId === store.detailBatchId ? T.layer1 : 'transparent'
             }
           },
-          h('div', { style: { fontFamily: MONO, fontSize: 11.5, color: T.text } }, batch.batchId),
           h(
-            'div',
+            'button',
             {
+              type: 'button',
+              onClick: () => void performDetail(batch.batchId),
               style: {
-                fontFamily: FONT,
-                fontSize: 11,
-                color: T.text2,
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap'
+                display: 'block',
+                flex: '1 1 auto',
+                minWidth: 0,
+                textAlign: 'left',
+                border: 'none',
+                background: 'transparent',
+                padding: '7px 10px',
+                cursor: 'pointer'
               }
             },
-            `${batch.title !== null && batch.title !== undefined ? batch.title : t('batchlist.untitled')} · ${formatTime(batch.createdAt)}`
+            h('div', { style: { fontFamily: MONO, fontSize: 11.5, color: T.text } }, batch.batchId),
+            h(
+              'div',
+              {
+                style: {
+                  fontFamily: FONT,
+                  fontSize: 11,
+                  color: T.text2,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap'
+                }
+              },
+              `${batch.title !== null && batch.title !== undefined ? batch.title : t('batchlist.untitled')} · ${formatTime(batch.createdAt)}`
+            )
+          ),
+          h(
+            'button',
+            {
+              type: 'button',
+              'data-testid': 'handoff-delete-batch',
+              title: t('batchlist.deleteTitle'),
+              'aria-label': t('batchlist.deleteTitle'),
+              onClick: () => requestDelete(batch),
+              style: {
+                border: 'none',
+                background: 'transparent',
+                color: T.error,
+                cursor: 'pointer',
+                fontFamily: FONT,
+                fontSize: 11,
+                padding: '0 8px',
+                flex: '0 0 auto'
+              }
+            },
+            t('batchlist.delete')
           )
         )
       return h(
@@ -1867,7 +1987,7 @@ window.__ModuleLoader__.load({
                   h(Badge, { text: t('history.badge'), color: T.warn })
                 )
               : null,
-            group.batches.map((batch) => batchButton(batch))
+            group.batches.map((batch) => batchRow(batch))
           )
         )
       )
@@ -2116,6 +2236,121 @@ window.__ModuleLoader__.load({
       )
     }
 
+    // ------------------------------------------------------- delete modal
+    /**
+     * Second confirmation for soft deletion. The dialog states the target batch,
+     * project key and recycle bin root, and that the UI never deletes
+     * permanently. Host refusals (for example a lineage-referenced batch) stay
+     * in the dialog as an error notice and are also toasted.
+     */
+    function DeleteModal() {
+      useStoreVersion()
+      const target = store.deleteTarget
+      if (target === null || typeof target !== 'object') return null
+      const batchId = typeof target.batchId === 'string' ? target.batchId : ''
+      const projectKey = typeof target.projectKey === 'string' ? target.projectKey : ''
+      const state = store.state
+      const targetName = store.target || 'user'
+      const targetRoot = state !== null && state.roots !== undefined ? state.roots[targetName] : null
+      const recycleBin =
+        typeof targetRoot === 'string' && targetRoot !== '' ? `${targetRoot}\\.trash` : '—'
+      const busy = store.deleteBusy === true
+      const header = h(
+        'div',
+        {
+          style: {
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            padding: '12px 14px',
+            borderBottom: `1px solid ${T.border1}`,
+            background: T.layer1
+          }
+        },
+        h('span', { style: { color: T.error, display: 'inline-flex' } }, h(HandoffGlyph, { size: 18 })),
+        h(
+          'div',
+          { style: { flex: '1 1 auto' } },
+          h('div', { style: { fontFamily: FONT, fontSize: 13.5, fontWeight: 600 } }, t('delete.title')),
+          h('div', { style: { fontFamily: FONT, fontSize: 11.5, color: T.text2 } }, t('delete.subtitle'))
+        ),
+        h(
+          'button',
+          {
+            type: 'button',
+            'aria-label': t('common.close'),
+            onClick: closeDelete,
+            style: { border: 'none', background: 'transparent', color: T.text2, cursor: 'pointer', fontSize: 16, lineHeight: '1', padding: 4 }
+          },
+          '×'
+        )
+      )
+      const body = h(
+        'div',
+        { style: { padding: '12px 14px' } },
+        h(
+          'div',
+          { style: { fontFamily: FONT, fontSize: 12, color: T.text, lineHeight: 1.7, marginBottom: 10 } },
+          t('delete.confirmBody', { batchId })
+        ),
+        h(KeyValue, { label: t('delete.projectKeyLabel'), mono: true, children: projectKey === '' ? '—' : projectKey }),
+        h(KeyValue, { label: t('delete.recycleBinLabel'), mono: true, children: recycleBin }),
+        h(
+          'div',
+          { style: { fontFamily: FONT, fontSize: 11, color: T.text2, lineHeight: 1.6, marginTop: 8 } },
+          t('delete.softOnly')
+        ),
+        h(ErrorNotice, { error: store.deleteError }),
+        h(
+          'div',
+          { style: { display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' } },
+          h(Button, { primary: true, danger: true, disabled: busy, testId: 'handoff-delete-confirm', onClick: () => void performDelete() }, busy ? t('delete.busy') : t('delete.confirm')),
+          h(Button, { testId: 'handoff-delete-cancel', onClick: closeDelete }, t('common.cancel'))
+        )
+      )
+      return h(
+        'div',
+        {
+          'data-testid': 'handoff-delete-dialog',
+          style: {
+            position: 'fixed',
+            inset: 0,
+            zIndex: 75,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'rgba(0, 0, 0, 0.42)'
+          },
+          onMouseDown: (event) => {
+            if (event.target === event.currentTarget) closeDelete()
+          }
+        },
+        h(
+          'div',
+          {
+            role: 'dialog',
+            'aria-modal': 'true',
+            'aria-label': t('delete.title'),
+            style: {
+              width: 'min(520px, calc(100vw - 40px))',
+              maxHeight: 'min(84vh, 640px)',
+              display: 'flex',
+              flexDirection: 'column',
+              background: T.overlay,
+              color: T.text,
+              border: `1px solid ${T.border2}`,
+              borderRadius: 12,
+              boxShadow: '0 18px 60px rgba(0, 0, 0, 0.45)',
+              overflow: 'hidden',
+              fontFamily: FONT
+            }
+          },
+          header,
+          h('div', { style: { overflowY: 'auto', flex: '1 1 auto', minHeight: 0 } }, body)
+        )
+      )
+    }
+
     // -------------------------------------------------------- floating panel
     function Tabs() {
       useStoreVersion()
@@ -2294,7 +2529,8 @@ window.__ModuleLoader__.load({
             { style: { overflowY: 'auto', flex: '1 1 auto', minHeight: 0 } },
             store.tab === 'load' ? h(LoadTab) : h(CreateTab)
           ),
-          footer
+          footer,
+          h(DeleteModal)
         )
       )
     }
@@ -2529,7 +2765,8 @@ window.__ModuleLoader__.load({
               h(DetailView, { detail: store.detail, loading: store.detailLoading, error: store.detailError })
             )
           ),
-          h(ContinueModal)
+          h(ContinueModal),
+          h(DeleteModal)
         )
       )
     }
@@ -2595,6 +2832,9 @@ window.__ModuleLoader__.load({
         shortSessionId,
         bindSession,
         groupBatchesByProject,
+        requestDelete,
+        closeDelete,
+        performDelete,
         store
       }
     }

@@ -48,9 +48,10 @@ function loadClientDefinition(options = {}) {
     }
   }
   if (options.storage !== undefined) window.localStorage = options.storage
-  const sandbox = { window }
+  const sandbox = { window, setTimeout: () => 0 }
   if ('document' in options) sandbox.document = options.document
   if ('navigator' in options) sandbox.navigator = options.navigator
+  if (typeof options.fetch === 'function') sandbox.fetch = options.fetch
   vm.runInNewContext(CLIENT_SOURCE, sandbox, { filename: 'client.js' })
   return definition
 }
@@ -764,4 +765,187 @@ test('the Load tab shows the same historical grouping and banner', () => {
   assert.ok(rendered.texts.includes('Historical project (read-only)'))
   assert.ok(rendered.texts.includes('20261022T023512Z-a1b2'))
   assert.ok(rendered.texts.includes('20261022T023512Z-c3d4'))
+})
+
+// --------------------------------------------------------------- UI delete
+
+/** State with one current-key batch, as the Host returns it. */
+function deletableState() {
+  return {
+    project: { key: 'ws-12345678', name: 'demo-app', workspace: '$WORKSPACE' },
+    session: { id: 'session-1', live: true, cwd: 'C:\\ws' },
+    batches: [
+      {
+        batchId: '20261022T023512Z-a1b2',
+        projectKey: 'ws-12345678',
+        dir: '$DSH_HOME/handoff/ws-12345678/20261022T023512Z-a1b2',
+        title: 'delete me',
+        createdAt: '2026-10-22T02:35:12.000Z',
+        complete: true,
+        artifacts: 3,
+        bytes: 120
+      }
+    ],
+    history: null,
+    roots: { user: 'C:\\Users\\test\\.dsh\\handoff', workspace: 'C:\\ws\\.dsh\\handoff' },
+    warnings: []
+  }
+}
+
+/** A fetch double that records RPC bodies and answers per method. */
+function rpcFetch(handlers = {}) {
+  const calls = []
+  const fetch = async (_url, init) => {
+    const body = JSON.parse(init.body)
+    calls.push(body)
+    const handler = handlers[body.method]
+    const payload = handler !== undefined
+      ? handler(body.params)
+      : body.method === 'state'
+        ? { ok: true, protocol: 1, value: { action: 'list', dir: '$DSH_HOME/handoff/ws-12345678', project: deletableState().project, batches: [], totals: {}, warnings: [], limits: {}, next: [] } }
+        : { ok: true, protocol: 1, value: {} }
+    return { status: 200, text: async () => JSON.stringify(payload) }
+  }
+  return { fetch, calls }
+}
+
+test('the batch list renders a delete button in the workbench and the load panel', () => {
+  const english = mountedClient()
+  english.plugin._test.store.state = deletableState()
+  const workbench = renderSlot(english.byName, 'main', {})
+  assert.ok(workbench.testIds.includes('handoff-delete-batch'))
+  assert.ok(workbench.texts.includes('Delete'))
+
+  const panel = mountedClient()
+  panel.plugin._test.store.state = deletableState()
+  panel.plugin._test.store.open = true
+  panel.plugin._test.store.tab = 'load'
+  const loadTab = renderSlot(panel.byName, 'shell.overlay', {})
+  assert.ok(loadTab.testIds.includes('handoff-delete-batch'))
+  assert.ok(loadTab.texts.includes('Delete'))
+
+  const chinese = mountedClient(languageOptions('zh-CN'))
+  chinese.plugin._test.store.state = deletableState()
+  const zhWorkbench = renderSlot(chinese.byName, 'main', {})
+  assert.ok(zhWorkbench.testIds.includes('handoff-delete-batch'))
+  assert.ok(zhWorkbench.texts.includes('删除'))
+})
+
+test('requestDelete opens a second confirmation dialog with the soft-delete copy', () => {
+  const { plugin, byName } = mountedClient()
+  plugin._test.store.state = deletableState()
+  plugin._test.requestDelete(deletableState().batches[0])
+  const rendered = renderSlot(byName, 'main', {})
+  assert.ok(rendered.testIds.includes('handoff-delete-dialog'))
+  assert.ok(rendered.testIds.includes('handoff-delete-confirm'))
+  assert.ok(rendered.testIds.includes('handoff-delete-cancel'))
+  assert.ok(rendered.texts.includes('Delete handoff batch'))
+  assert.ok(rendered.texts.includes('Move to recycle bin'))
+  assert.ok(
+    rendered.texts.some(
+      (text) => text.includes('20261022T023512Z-a1b2') && text.includes('recycle bin')
+    )
+  )
+  assert.ok(
+    rendered.texts.some((text) => text.includes('soft-deletes') && text.includes('CLI'))
+  )
+  // The recycle-bin root is shown as the target of the move.
+  assert.ok(
+    rendered.texts.some((text) => text.includes('.trash') && text.includes('handoff'))
+  )
+
+  // Closing the dialog writes nothing and clears the target.
+  plugin._test.closeDelete()
+  assert.equal(plugin._test.store.deleteTarget, null)
+  const closed = renderSlot(byName, 'main', {})
+  assert.equal(closed.testIds.includes('handoff-delete-dialog'), false)
+
+  // The Chinese surface carries the same confirmation.
+  const zh = mountedClient(languageOptions('zh-CN'))
+  zh.plugin._test.store.state = deletableState()
+  zh.plugin._test.requestDelete(deletableState().batches[0])
+  const zhRendered = renderSlot(zh.byName, 'main', {})
+  assert.ok(zhRendered.testIds.includes('handoff-delete-dialog'))
+  assert.ok(zhRendered.texts.includes('删除交接批次'))
+  assert.ok(zhRendered.texts.includes('移入回收站'))
+  assert.ok(zhRendered.texts.some((text) => text.includes('软删除')))
+  assert.ok(zhRendered.texts.some((text) => text.includes('.trash')))
+})
+
+test('performDelete soft-deletes through the Host RPC and refreshes the list', async () => {
+  const { fetch, calls } = rpcFetch({
+    delete: () => ({
+      ok: true,
+      protocol: 1,
+      value: {
+        ok: true,
+        batchId: '20261022T023512Z-a1b2',
+        projectKey: 'ws-12345678',
+        mode: 'trash',
+        trashDir: '$DSH_HOME/handoff/.trash/ws-12345678/20261022T023512Z-a1b2-20261022T023512Z',
+        warnings: []
+      }
+    })
+  })
+  const { plugin } = mountedClient({ fetch })
+  plugin._test.store.state = deletableState()
+  plugin._test.requestDelete(deletableState().batches[0])
+  const result = await plugin._test.performDelete()
+  assert.equal(result.mode, 'trash')
+  assert.equal(plugin._test.store.deleteTarget, null)
+  assert.equal(plugin._test.store.deleteError, null)
+  assert.equal(plugin._test.store.toast, 'Batch moved to the recycle bin')
+  const deleteCall = calls.find((body) => body.method === 'delete')
+  assert.ok(deleteCall, 'delete RPC was called')
+  assert.equal(deleteCall.params.batchId, '20261022T023512Z-a1b2')
+  // The UI only ever requests soft deletion.
+  assert.equal('hard' in deleteCall.params, false)
+  assert.equal('mode' in deleteCall.params, false)
+  assert.equal('force' in deleteCall.params, false)
+  assert.equal(calls.some((body) => body.method === 'state'), true)
+})
+
+test('performDelete sends the historical projectKey locator and never forces a lineage break', async () => {
+  const { fetch, calls } = rpcFetch({
+    delete: () => ({
+      ok: true,
+      protocol: 1,
+      value: { ok: true, batchId: '20261022T023512Z-a1b2', projectKey: 'old-key-11111111', mode: 'trash', trashDir: '$DSH_HOME/handoff/.trash/old-key-11111111/x', warnings: [] }
+    })
+  })
+  const { plugin } = mountedClient({ fetch })
+  plugin._test.requestDelete({
+    batchId: '20261022T023512Z-a1b2',
+    projectKey: 'old-key-11111111'
+  })
+  await plugin._test.performDelete()
+  const deleteCall = calls.find((body) => body.method === 'delete')
+  assert.equal(deleteCall.params.projectKey, 'old-key-11111111')
+  assert.equal('force' in deleteCall.params, false)
+})
+
+test('performDelete surfaces a Host refusal as an error toast and keeps the dialog open', async () => {
+  const { fetch } = rpcFetch({
+    delete: () => ({
+      ok: false,
+      protocol: 1,
+      error: {
+        code: 'HANDOFF_BATCH_REFERENCED',
+        message: 'batch is referenced by a newer batch',
+        remedy: 'delete the newer batch first'
+      }
+    })
+  })
+  const { plugin, byName } = mountedClient({ fetch })
+  plugin._test.store.state = deletableState()
+  const batch = deletableState().batches[0]
+  plugin._test.requestDelete(batch)
+  const result = await plugin._test.performDelete()
+  assert.equal(result, null)
+  assert.equal(plugin._test.store.deleteTarget.batchId, batch.batchId)
+  assert.equal(plugin._test.store.deleteError.code, 'HANDOFF_BATCH_REFERENCED')
+  assert.match(plugin._test.store.toast, /referenced/)
+  const rendered = renderSlot(byName, 'main', {})
+  assert.ok(rendered.testIds.includes('handoff-delete-dialog'))
+  assert.ok(rendered.texts.some((text) => text.includes('referenced by a newer batch')))
 })
