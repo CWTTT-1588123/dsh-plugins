@@ -63,6 +63,7 @@
 | [P0 验收记录](handoff-kit/acceptance/P0.md) | 验收 | frozen | P0 | P0 L1–L3 证据（批次引用已归档见 GAPS §2） |
 | [P1 验收记录](handoff-kit/acceptance/P1.md) | 验收 | frozen | P1 | P1 M1–M3 + 0.2.1 清理证据 |
 | [P2 验收记录](handoff-kit/acceptance/P2.md) | 验收 | frozen | P2 | P2 U0–U4/L1–L3 浏览器实测证据、已知缺口（0.3.0；§9 为 0.3.1 提示词安全勘误） |
+| [P3 验收记录](handoff-kit/acceptance/P3.md) | 验收 | frozen | P3 | P3 1.0 证据：规范/迁移器/CLI/发布/签名策略删除/代理验收/迁移与回滚/已知限制（M6 产出） |
 | [插件 README](../plugins/dsh-handoff-kit/README.md) | 产品文档 | current | 1.0.0-rc | 插件使用/安装/开发说明（UI 工作台/中英文切换/项目选择器；签名/策略/回执；批次删除；re-grounding 与路径存在性） |
 | [插件使用说明（标准交接流程）](../plugins/dsh-handoff-kit/USAGE.md) | 使用说明 | current | 1.0.0-rc | 旧会话生成 → 新会话只粘贴 → 旁证只读复核 → 明确指令后开工（四步；含 re-grounding/语言切换/高级功能） |
 | [插件使用说明（英文）](../plugins/dsh-handoff-kit/USAGE.en.md) | 使用说明 | current | 1.0.0-rc | USAGE.md 英文对照（四步标准交接流程；1.0 公开门面） |
@@ -87,6 +88,7 @@
 | `plugins/dsh-handoff-kit/bin/handoff-kit.mjs` + `src/cli.js`（零依赖 CLI） | 已建 | P3/M3（2026-10-23） |
 | `plugins/dsh-handoff-kit/test/cli.test.js`（CLI E2E） | 已建 | P3/M3（2026-10-23） |
 | `plugins/dsh-handoff-kit/USAGE.en.md`（英文使用说明） | 已建 | P3/M4（2026-10-23） |
+| `docs/handoff-kit/acceptance/P3.md`（P3 1.0 验收记录） | 已建 | P3/M6（2026-10-23） |
 | 根/包内 `LICENSE`、`.github/ISSUE_TEMPLATE/`、`.github/workflows/ci.yml`（公开门面/CI） | 已建 | P3/M4（2026-10-23） |
 
 P3 M0–M3 已完成，M4 门面/CI/英文 UI i18n/P2-G1 已完成；`1.0.0-rc.1` 的 npm 发布待用户确认。无需其他待建文档。

@@ -7,10 +7,12 @@
 
 ## [Unreleased]
 
-## [1.0.0-rc.3] - 2026-10-23
+## [1.0.0] - 2026-10-23
 
-P3 M5 可信度外层 + 转接增强（re-grounding / 路径存在性）+ M5b 批次删除。
-P0–P2 运行边界不变（零依赖 / 无网络 / 无子进程 / 无 LLM / 历史批次不原地重写）。
+**1.0 正式版**：由 `1.0.0-rc.3` 候选晋升（rc.3 未单独发布）。P3 平台化完成——规范公开、
+schema 迁移器、跨工具 CLI、GitHub 公开仓库 + npm 发布、签名/审计回执/脱敏策略、批次删除、
+转接增强（re-grounding + 路径存在性）。P0–P2 运行边界不变（零依赖 / 无网络 / 无子进程 /
+无 LLM / 历史批次不原地重写）。详见 [P3 验收记录](docs/handoff-kit/acceptance/P3.md)。
 
 ### Added
 
@@ -35,10 +37,13 @@ P0–P2 运行边界不变（零依赖 / 无网络 / 无子进程 / 无 LLM / �
 - **转接增强 A2（路径存在性）**：`HANDOFF_PATH_MISSING`——生成时 HANDOFF 引用的仓库相对路径
   缺失记入生成 warnings（不阻断）；verify/load（CLI 带 `--workspace`）记 warn finding
   （trust=stale，不判 invalid）；忽略 URL/纯文件名/空格路径/逃逸，`$DSH_HOME` 不解析。
+- 规范/CLI/界面：签名 `signature.json`、策略 `policy.json`、回收站 `.trash` 写入 `spec/HANDOFF.md`
+  §3/§8；`spec/verify.md` 新增 Step 4b/6b、`SIGNATURE_INVALID`/`HANDOFF_PATH_MISSING`、结果级
+  `signature`/`receipt`、CLI `sign`/`delete`/`--pubkey` 契约。
 
 ### Changed
 
-- 版本 `1.0.0-rc.2` → `1.0.0-rc.3`；测试 303 → **362**。
+- 版本 `1.0.0-rc.2` → `1.0.0`（由 rc.3 候选晋升）；测试 303 → **362**。
 - Host `fs` service 无 rename/remove 原语（GAPS G3）：删除 adapter 优先可选 `fs.rename`/`fs.remove`
   能力，否则回退 `node:fs`（本地 Host 文件系统；先过 target/sandbox 写权限门）。
 - H7 文案微调：未发现 AGENTS.md 时不再输出 `$WORKSPACE/AGENTS.md` 绝对令牌形式（避免 A2 误判）。
@@ -50,6 +55,10 @@ P0–P2 运行边界不变（零依赖 / 无网络 / 无子进程 / 无 LLM / �
 - `migrate` 不读取 policy（只复制源批次，不扫描/复制用户工作区文件）。
 - 过宽的自定义 redaction 规则可能让终检（`HANDOFF_SECRET_CHECK_FAILED`）意外拒绝生成
   （fail-closed，属预期安全行为）。
+- 交接包不包含旧会话原始消息正文（隐私/成本/宿主限制）；新会话靠“交接叙述 + 证据 + re-grounding”
+  继续工作，而不是回放旧对话。
+- `plugin_manager` 在运行中切换 link↔npm 安装源需重启，且本机版本 `remove_bundle` 会清空 link
+  目标目录（M4 演练发现，已恢复；详见 GAPS §3）；安装演练必须先备份。
 
 ## [1.0.0-rc.2] - 2026-10-23
 
