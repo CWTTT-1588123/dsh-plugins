@@ -1,6 +1,6 @@
 # dsh-plugins ROADMAP
 
-<!-- docs-meta: status=current; phase=cross; verified=2430f1b@2026-10-23; tracks=-; supersedes=-; superseded-by=- -->
+<!-- docs-meta: status=current; phase=cross; verified=dd91f73@2026-10-23; tracks=-; supersedes=-; superseded-by=- -->
 
 > 本文件是插件仓库**阶段与状态的唯一权威**。规划、进度、验收均以这里为准；
 > 每阶段的设计与验收见 `docs/<插件>/{design,acceptance}/`。
@@ -13,7 +13,7 @@
 | P0 | 0.1.x | 手动生成 + 校验闭环 | **done**（0.1.0，2026-10-22） | [P0 实施计划](docs/handoff-kit/design/P0_implementation_plan.md) | [P0 验收记录](docs/handoff-kit/acceptance/P0.md) |
 | P1 | 0.2.x | 真实改动证据 + 消费闭环 + 轻自动 | **done**（0.2.0，2026-10-22；0.2.1 挂账清理） | [P1 实施计划](docs/handoff-kit/design/P1_plan.md) | [P1 验收记录](docs/handoff-kit/acceptance/P1.md) |
 | P2 | 0.3.x | UI 工作台（对接提示词优先） | **done**（0.3.0，2026-10-22；0.3.1 提示词安全修复） | [P2 计划](docs/handoff-kit/design/P2_plan.md) | [P2 验收记录](docs/handoff-kit/acceptance/P2.md) |
-| P3 | 1.0 | 规范与分发 | **进行中**（M0–M4 完成，2026-10-23；下一步 M5 签名/审计/脱敏策略；rc.2 含 rc.1 后修复待发布） | [P3 实施计划](docs/handoff-kit/design/P3_plan.md) | 进行中（M6 产出） |
+| P3 | 1.0 | 规范与分发 | **进行中**（M0–M4 完成，2026-10-23；rc.2 版本已提交 `dd91f73` 待发布；下一步 M5 签名/审计/脱敏策略） | [P3 实施计划](docs/handoff-kit/design/P3_plan.md) | 进行中（M6 产出） |
 
 ## P0 — 可用（0.1.x）
 

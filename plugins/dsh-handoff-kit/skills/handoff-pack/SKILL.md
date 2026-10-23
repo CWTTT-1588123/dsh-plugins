@@ -3,7 +3,7 @@ name: handoff-pack
 description: 生成、校验或消费当前工作区的确定性会话交接包（HANDOFF.md + manifest.json）。
 ---
 
-<!-- docs-meta: status=current; phase=P2; verified=2430f1b@2026-10-23; tracks=plugins/dsh-handoff-kit/src; supersedes=-; superseded-by=- -->
+<!-- docs-meta: status=current; phase=P2; verified=dd91f73@2026-10-23; tracks=plugins/dsh-handoff-kit/src; supersedes=-; superseded-by=- -->
 
 # handoff-pack：会话交接包
 

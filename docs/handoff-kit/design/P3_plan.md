@@ -1,6 +1,6 @@
 # dsh-handoff-kit P3 设计草案——平台化（1.0，A 档：开源公开产品）
 
-<!-- docs-meta: status=current; phase=P3; verified=2430f1b@2026-10-23; tracks=plugins/dsh-handoff-kit/src; supersedes=-; superseded-by=- -->
+<!-- docs-meta: status=current; phase=P3; verified=dd91f73@2026-10-23; tracks=plugins/dsh-handoff-kit/src; supersedes=-; superseded-by=- -->
 
 > 版本：**v1.0（2026-10-23，P3 执行计划；用户批准开工）**。
 > 产品档位：**A —— 开源公开产品**（用户 2026-10-22 两轮对齐确认，决议见 §0.1）。
@@ -340,7 +340,7 @@ M0 评审/基线 → M1 规范 → M2 迁移器 → M3 跨工具适配 → M4 �
 - 2026-10-23 08:3x：**1.0.0-rc.1 发布完成 + 安装演练（含严重工具链发现）**——npm 发布成功（registry `latest`/`next` 均指向 `1.0.0-rc.1`；tarball 33 文件核对通过、无 test/docs/.github；`npx dsh-handoff-kit@1.0.0-rc.1 verify <真实批次>` → exit 0 / trust=verified）；git tag `v1.0.0-rc.1` 已推送。**安装演练**：npm 包体安装成功，但实时激活失败、需重启 DSH；`plugin_manager remove_bundle` 对 `link:` bundle **清空了本地插件目录 64 个文件**，已 `git restore` 完整恢复并验证（283 测试/docs:check 0 error/工作树干净/junction 可解析）。详见 [GAPS](../GAPS.md) §3。当前 profile 已恢复为 link 安装（待重启加载）。
 - 2026-10-23 08:4x：**重启后插件恢复**（`handoff_pack`/`handoff_load` 工具与 `handoff-pack` 技能重新加载；profile 为 link 安装、版本 `1.0.0-rc.1`；工作树干净、283 测试全绿）。**新发现（GAPS §3.4）**：M4 添加 GitHub remote 使 `projectKey` 由 `dsh-plugins-cb7aa4e5`（workspace seed）变为 `dsh-plugins-45e08a68`（remote seed），旧 8 批次默认入口不可见；CLI 显式批次路径仍可 verify（trust=verified）。列入 1.0 前收口：显式 `batchId` 跨 project key 只读回退（`PROJECT_KEY_FALLBACK` 警告）+ 文档迁移说明。
 - 2026-10-23 09:0x：**rc.1 后修复完成（提交 `91a4fae`，待 rc.2 发布）**——①中文界面回归：语言探测改为「显式偏好 > 浏览器 zh* > 页面 lang > 英文」，新增工作台/浮层面板 **中文/English** 切换（即时生效、`localStorage: dsh.handoff-kit.locale`）；②projectKey 变化：显式 `batchId` 的 `load`/`verify` 跨兄弟 project key **只读**回退（`PROJECT_KEY_FALLBACK` 结果级警告，不降级 trust；回退只匹配同 workspace slug 的历史 key，避免混入无关项目，提交 `2430f1b`），工作台 0 批次时按 key 分组显示历史批次（只读横幅、禁用继续交接），写操作仍只写当前 key；spec/HANDOFF §2/§5、spec/verify §5.3、README/USAGE 已同步。测试 283→301 全绿、`docs:check` 0 error；后续小修为 303 测试。
-- 2026-10-23 09:10：**M4 浏览器验收通过（用户确认，截图证据）**——重启后插件从本地 link 加载（工具/技能正常、版本 `1.0.0-rc.1`）：①界面中文（探测顺序修复生效，中文/English 切换可见）；②「载入」显示「历史项目（只读）」横幅 + `dsh-plugins-cb7aa4e5` 的 8 个旧批次（分组/只读徽章，`stand-*` 无关项目已被 slug 过滤排除）；③打开旧批次 `20261022T140057Z-b49e` 显示 `trust=stale` 与 9 条漂移警告（`GIT_HEAD_CHANGED` 589c3f6→ccaf0e2、`SOURCE_FILE_CHANGED` 等，属正确漂移）；④Host 侧 `handoff_pack verify` 对该显式 batchId 走跨 key 只读回退并返回 `PROJECT_KEY_FALLBACK` 结果级警告。测试 303 全绿、`docs:check` 0 error/0 stale。**M4 收口；下一步 rc.2 发布（含语言/回退修复），随后 M5 签名/审计/脱敏策略。**
+- 2026-10-23 09:10：**M4 浏览器验收通过（用户确认，截图证据）**——重启后插件从本地 link 加载（工具/技能正常、版本 `1.0.0-rc.1`）：①界面中文（探测顺序修复生效，中文/English 切换可见）；②「载入」显示「历史项目（只读）」横幅 + `dsh-plugins-cb7aa4e5` 的 8 个旧批次（分组/只读徽章，`stand-*` 无关项目已被 slug 过滤排除）；③打开旧批次 `20261022T140057Z-b49e` 显示 `trust=stale` 与 9 条漂移警告（`GIT_HEAD_CHANGED` 589c3f6→ccaf0e2、`SOURCE_FILE_CHANGED` 等，属正确漂移）；④Host 侧 `handoff_pack verify` 对该显式 batchId 走跨 key 只读回退并返回 `PROJECT_KEY_FALLBACK` 结果级警告。测试 303 全绿、`docs:check` 0 error/0 stale。**M4 收口；rc.2 版本已提交（`dd91f73`），待用户 `npm publish --tag next`；随后 M5 签名/审计/脱敏策略。**
 
 **文档治理落点（评审通过后，需另行批准的改动）**：
 
